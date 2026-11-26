@@ -1,0 +1,22 @@
+# A 12 lb brisket at 225 °F from a cold kettle: the heat-up, the stall around
+# 150 °F, done at 203 °F, then the pit settling on its cook-hold temperature.
+name: brisket-12h
+description: A 12 lb brisket at 225 °F from a cold start.
+duration: 14h
+seed: 0
+controller: proportional
+ambient: 70
+wind_mph: 0
+
+cooker:
+  fuel_lb: 15
+
+device:
+  cook_set: 225
+  food_set: {food1: 203}
+  cookhold: 180
+
+names: {cook: Pit, food1: Brisket}
+
+food:
+  food1: {cut: brisket, mass_lb: 12, temp_f: 40}

@@ -1,0 +1,18 @@
+# A cold, windy day: 34 °F falling to 22 °F overnight, a 15 mph wind, and a
+# pit to bring to 250 °F from cold and hold there.
+name: cold-windy
+description: 34 °F and falling, 15 mph of wind, a pit to hold at 250 °F from cold.
+duration: 10h
+seed: 0
+controller: proportional
+ambient: [[0, 34], [6h, 22]]
+wind_mph: 15
+
+cooker:
+  fuel_lb: 15
+
+device:
+  cook_set: 250
+  cookhold: 180
+
+names: {cook: Pit}

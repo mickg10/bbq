@@ -15,6 +15,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "python-multipart>=0.0.9",
+    "pyyaml>=6.0",
 ]
 
 [build-system]
@@ -28,3 +29,7 @@ packages = ["app"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+# The default run skips the tests that serve the simulator on a real port
+# (about 17 s); run those with `pytest -m slow`.
+addopts = "-m 'not slow'"
+markers = ["slow: serves a simulator or the dashboard on a real port"]

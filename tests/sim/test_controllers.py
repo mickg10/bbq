@@ -213,6 +213,17 @@ def test_the_documented_law_is_unbiased_by_default():
         get_controller("pi", ki=-1.0)
 
 
+def test_the_bias_preset_is_the_baseline_with_a_third_of_the_fan_up_front():
+    preset = get_controller("bias")
+    assert preset.name == "bias" and preset.bias_pct == pytest.approx(33.0)
+    cfg = _cfg()
+    at_target = preset.step(0.0, 225.0, NO_FOOD, cfg)
+    assert at_target.fan_pct == 33            # where the baseline stops dead
+    assert preset.step(0.0, 150.0, NO_FOOD, cfg).fan_pct == 100
+    assert preset.step(0.0, 240.0, NO_FOOD, cfg).fan_pct == 0  # 33 − 50
+    assert get_controller("bias", bias_pct=20.0).bias_pct == 20.0
+
+
 def _minutes(law, cfg, temp, minutes, t):
     for _ in range(minutes):
         out = law.step(t, temp, NO_FOOD, cfg)
@@ -267,9 +278,10 @@ def test_pi_reset_and_on_off():
 # -- the plug-in registry -----------------------------------------------------
 
 def test_controllers_are_found_by_name():
-    assert get_controller("proportional").name == "proportional"
-    assert get_controller("pi").name == "pi"
-    assert get_controller("firmware").name == "firmware"
+    assert sorted(name for name in ("proportional", "bias", "pi", "firmware") if get_controller(name)) == [
+        "bias", "firmware", "pi", "proportional",
+    ]
+    assert get_controller("bias").name == "bias"
     with pytest.raises(ValueError):
         get_controller("pid")
 

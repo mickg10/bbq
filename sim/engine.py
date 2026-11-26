@@ -13,17 +13,21 @@ is ``dt`` seconds (1 s by default):
 Everything random comes from per-channel streams seeded from ``seed``, and
 time only moves in whole ``dt`` steps, so the same seed and inputs replay
 bit-for-bit regardless of how fast the steps are taken.
+
+``open_loop`` (a callable of time giving a fan demand in %) takes the fan out
+of the controller's hands and drives it from a recording instead — how
+:mod:`sim.history` replays a real cook's own output through the plant.
 """
 
 from __future__ import annotations
 
 import random
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable, Sequence
 
 from sim.clock import SimClock
-from sim.controllers.base import FOOD_PROBES
+from sim.controllers.base import FOOD_PROBES, duty_in_step
 from sim.device import CyberQDevice, DeviceOutput, DeviceSettings
 from sim.food import Food
 from sim.plant import Cooker, Plant
@@ -125,13 +129,15 @@ class Simulator:
         self.env = env if env is not None else Environment()
         self.dt = float(dt)
         self.sample_every = int(sample_every)
-        self.events = sorted(events, key=lambda event: (event.t, event.label))
+        self.events = sorted(events, key=lambda event: event.t)  # stable: ties keep file order
         self.seed = int(seed)
         for i, probe in enumerate(self.probes):
             probe.rng = random.Random(self.seed * 1_000_003 + i)
         self.rows: list[dict] | deque[dict] = (
             deque(maxlen=max_rows) if max_rows is not None else []
         )
+        #: set to a callable ``t -> fan %`` to drive the fan from a recording
+        self.open_loop: Callable[[float], float] | None = None
         self.steps = 0
         self._next_event = 0
         # a reading for t = 0, so the first control step sees the probes
@@ -170,11 +176,28 @@ class Simulator:
             self.events[self._next_event].action(self)
             self._next_event += 1
 
+    def catch_up(self, t: float | None = None) -> int:
+        """Fire the events due by time ``t`` (default: now) without stepping.
+
+        :meth:`step` fires events as it starts; this is for a caller that
+        wants the state at a moment to already include what became due at
+        that very moment — as :mod:`sim.history` does when it lines a replay
+        up with a recording. Returns how many fired."""
+        due = self._next_event
+        self._fire_events(self.clock.t if t is None else t)
+        return self._next_event - due
+
     def step(self) -> dict:
         """Advance one ``dt`` and return the row for the new moment."""
         t = self.clock.t
         self._fire_events(t)
         out = self.device.step(t, self.dt, [probe.reading for probe in self.probes])
+        if self.open_loop is not None:  # a recording drives the fan, not the law
+            pct = int(min(max(round(self.open_loop(t)), 0), 100))
+            out = replace(
+                out, fan_pct=pct,
+                duty=duty_in_step(t, self.dt, pct, self.device.settings.cyctime_s) if pct else 0.0,
+            )
         t_amb = self.env.ambient_at(t)
         self.cooker.step(
             self.dt,

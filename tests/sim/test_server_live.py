@@ -4,6 +4,9 @@ the dashboard (app.main) driving it exactly as it drives the real CyberQ.
 Speeds are high (600× by default) so a cook's first hour takes six seconds;
 the tests wait on simulated time, not wall time, so they do not depend on how
 fast the machine is.
+
+Marked ``slow``: the default pytest run skips this module (see pyproject).
+Run it with ``pytest -m slow``.
 """
 
 from __future__ import annotations
@@ -17,6 +20,8 @@ from fastapi.testclient import TestClient
 from app.device import parse_all_xml, parse_status_xml
 from app.main import Settings, create_app
 from sim.device import parse_hhmmss
+
+pytestmark = pytest.mark.slow
 
 FORM = {"Content-Type": "application/x-www-form-urlencoded"}
 
@@ -77,9 +82,10 @@ def test_booting_is_recorded_and_nothing_resets(serve_sim):
 
 
 def test_the_served_history_stays_bounded(serve_sim):
-    _, sim = serve_sim()
-    _until(lambda: sim.clock.t >= 3600, message="an hour of simulation")
-    assert len(sim.rows) <= 3600
+    _, sim = serve_sim(max_rows=300)
+    _until(lambda: sim.clock.t >= 400, message="400 simulated seconds")
+    assert len(sim.rows) == 300          # capped: a server can run for days
+    assert sim.rows[-1]["t"] == pytest.approx(sim.clock.t)
 
 
 # -- the dashboard against it ---------------------------------------------------

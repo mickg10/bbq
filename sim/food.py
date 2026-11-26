@@ -54,15 +54,18 @@ class FoodParams:
             raise ValueError("moisture_tail must be in (0, 1]")
 
 
-#: Cuts a scenario can name. All use the 4 BTU/(h·°F) coupling of a football-sized
-#: roast; mass sets the warm-up time, the moisture reserve the stall's length.
-#: ``chicken``/``no-stall`` never stall (a chicken dries out before it matters).
+#: Cuts a scenario can name. The roasts all use the 4 BTU/(h·°F) coupling of a
+#: football-sized piece; mass sets the warm-up time, the moisture reserve the
+#: stall's length. ``chicken``/``no-stall`` never stall (a chicken dries out
+#: before it matters). ``air`` is no food at all: a probe plugged in with
+#: nothing on it, reading the pit.
 PRESETS: dict[str, FoodParams] = {
     "brisket": FoodParams(mass_lb=12.0, moisture_btu=1400.0),
     "pork-butt": FoodParams(mass_lb=8.0, moisture_btu=1000.0),
     "ribs": FoodParams(mass_lb=4.5, moisture_btu=420.0),
     "chicken": FoodParams(mass_lb=4.0, moisture_btu=0.0),
     "no-stall": FoodParams(mass_lb=4.0, moisture_btu=0.0),
+    "air": FoodParams(mass_lb=0.0, moisture_btu=0.0),
 }
 
 

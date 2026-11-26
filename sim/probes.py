@@ -6,6 +6,11 @@ temperature with a first-order lag, adds Gaussian noise and reports tenths of
 device's ``OPEN`` — and while it is unplugged it keeps tracking the ambient
 air, so plugging it back in shows a reading that has to warm (or cool) its
 way back to the truth rather than snapping there.
+
+The default noise, 0.12 °F, is measured: the sd of successive readings on a
+real device's pit probe over two idle stretches (1263 and 545 samples) came
+to 0.112 and 0.136 °F, and 0.128 °F on a food probe. The lag (20 s) is an
+estimate, to be fitted from a real heat-up.
 """
 
 from __future__ import annotations
@@ -24,7 +29,7 @@ class Probe:
         self,
         *,
         tau_s: float = 20.0,
-        sigma_f: float = 0.15,
+        sigma_f: float = 0.12,
         rng: random.Random | None = None,
         plugged: bool = True,
     ) -> None:
@@ -55,6 +60,12 @@ class Probe:
     def reading_f(self) -> float | None:
         """The last reading in °F, or None while unplugged."""
         return None if self.reading is None else self.reading / 10.0
+
+    @property
+    def tracked(self) -> float | None:
+        """The lagged, noise-free value behind the last reading (°F), or None
+        until the probe has stepped once."""
+        return self._x
 
     def settle(self, true_f: float) -> None:
         """Skip the lag: the probe is already at ``true_f`` (a preheated start)."""

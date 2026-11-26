@@ -29,7 +29,8 @@ FastAPI + uvicorn + httpx, SQLite from the stdlib, vanilla-JS UI with
 ```sh
 uv venv --python 3.12 .venv
 uv pip install -p .venv -e '.[dev]'
-.venv/bin/python -m pytest -q          # the whole suite; no test touches a real device
+.venv/bin/python -m pytest -q          # the fast suite; no test touches a real device
+.venv/bin/python -m pytest -q -m slow  # the tests that serve the simulator on a real port
 uvicorn dev.fake_cyberq:app --port 8099              # fake CyberQ: static fixture values
 .venv/bin/python -m sim serve --speed 60 --port 8099 # simulated CyberQ: a live model
 CYBERQ_URL=http://127.0.0.1:8099 DB_PATH=bbq-dev.db \
@@ -45,6 +46,26 @@ device's wire format. It serves the same pages, XML and forms as the real box,
 byte for byte, so the dashboard can be developed against a cook that heats up,
 stalls and recovers instead of static fixtures. `--speed 60` runs an hour of
 cooking in a minute.
+
+It also runs headless, against scenarios:
+
+```sh
+.venv/bin/python -m sim run                                   # scorecard: every scenario, its own controller
+.venv/bin/python -m sim run --controller proportional,bias,pi  # every scenario under each law
+.venv/bin/python -m sim run lid-open --set opendetect=false    # one cook, with a setting overridden
+.venv/bin/python -m sim run brisket-12h --controller pi --out run.csv --json run.json
+.venv/bin/python -m sim compare --db bbq.db --food food1=brisket --skip 4h55m:5h40m
+.venv/bin/python -m sim fit --db bbq.db --out cooker.yaml
+```
+
+The scenarios are in [`scenarios/`](scenarios/); [`sim/scenario.py`](sim/scenario.py)
+says what one can contain. `run` gives each cook a summary — overshoot, where it
+settled and for how long, the steady error, the fan, the fuel — and, with more
+than one run, a table to compare them by. `compare` replays a recorded cook from
+the dashboard's history through the model and scores it against what was
+measured; `fit` estimates the cooker's parameters from such a recording, and
+says so when the recording has no heat-up to learn from. Both open the database
+read-only and leave nothing beside it.
 
 ## Configuration
 
@@ -109,6 +130,8 @@ static/     index.html, app.js, app.css, vendored uPlot
 tests/      test_device_allowlist.py, test_parse.py, test_api.py, test_fake_cyberq.py
 tests/sim/  the simulator's tests, including the dashboard run against it
 dev/        fake_cyberq.py (test double), make_fixtures.py, fixtures/ (sanitized pages)
-sim/        the simulator: plant, food, probes, controllers, device, clock, engine, server, cli
+sim/        the simulator: plant, food, probes, controllers, device, clock, engine, server,
+            scenario, run, summary, history, fit, cli
+scenarios/  the cooks `sim run` can play: brisket-12h, ribs-6h, lid-open, fuel-out, cold-windy
 recon/      raw device captures (config.xml, wifi.htm, email.htm are gitignored: credentials)
 ```

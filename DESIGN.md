@@ -62,8 +62,8 @@ A single static page: vanilla JS plus uPlot, vendored. Four probe cards with tem
 
 ## Testing
 - `fake_cyberq.py`: a tiny FastAPI app that serves the recon XML and accepts the allowlisted POSTs. All dev work and tests run against it.
-- `sim/`: the simulator ([docs/SIMULATOR.md](docs/SIMULATOR.md)) — the same wire format in front of a thermal model of the cooker and the CyberQ's control loop. `python -m sim serve` stands in for the device while developing.
-- Tests never touch a real device.
+- `sim/`: the simulator ([docs/SIMULATOR.md](docs/SIMULATOR.md)) — the same wire format in front of a thermal model of the cooker and the CyberQ's control loop. `python -m sim serve` stands in for the device while developing; `python -m sim run` plays a scenario headless and sums it up; `compare` and `fit` work on the dashboard's recorded history.
+- Tests never touch a real device. `pytest -q` is the fast suite; the tests that serve the simulator on a real port are marked `slow` (`pytest -m slow`).
 
 ## Repo layout
 ```
@@ -72,7 +72,8 @@ static/     index.html, app.js, uplot.*
 tests/      test_device_allowlist.py, test_parse.py, test_api.py
 tests/sim/  the simulator's tests
 dev/        fake_cyberq.py
-sim/        the simulator (plant, food, probes, controllers, device, server, cli)
+sim/        the simulator (plant, food, probes, controllers, device, clock, engine, server, scenario, run, history, fit, cli)
+scenarios/  what `sim run` plays
 recon/      raw captures (config.xml is gitignored: it holds secrets)
 Dockerfile, docker-compose.yml, pyproject.toml
 ```

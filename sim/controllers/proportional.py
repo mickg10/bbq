@@ -25,7 +25,8 @@ it then.
 
 Two options are off by default and exist for what the firmware turns out to
 do: ``bias_pct`` adds a fixed share of fan to the proportional term, and
-:class:`ProportionalIntegralController` (``pi``) adds integral action.
+:class:`ProportionalIntegralController` (``pi``) adds integral action. The
+``bias`` preset is the baseline with that share set, for comparisons.
 """
 
 from __future__ import annotations
@@ -39,6 +40,9 @@ from sim.controllers.base import ControlConfig, ControlOutput, Mode
 
 #: Where the ramp starts: this many °F short of its target.
 DEFAULT_RAMP_SPAN_F = 30.0
+
+#: The fan share the ``bias`` preset puts up front.
+DEFAULT_BIAS_PCT = 33.0
 
 
 def round_half_up(value: float) -> int:
@@ -162,6 +166,22 @@ class ProportionalController:
         lid_hold = self.lid_open(t, pit_f, cfg)
         fan_pct = self._demand(t, setpoint, pit_f, cfg, lid_hold)
         return ControlOutput(fan_pct, setpoint, lid_hold, ramping)
+
+
+@register
+class BiasedProportionalController(ProportionalController):
+    """The documented law with a fixed share of the fan up front (``bias``).
+
+    Not a documented CyberQ mode. It sits between the baseline and ``pi`` in
+    the comparison table as the simplest thing that closes most of the
+    baseline's steady offset without any memory. The default share is about
+    what a 225 °F hold needs on the default cooker.
+    """
+
+    name = "bias"
+
+    def __init__(self, *, bias_pct: float = DEFAULT_BIAS_PCT, **baseline) -> None:
+        super().__init__(bias_pct=bias_pct, **baseline)
 
 
 @register

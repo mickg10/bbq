@@ -125,9 +125,12 @@ class Plant:
         wind_mph: float = 0.0,
     ) -> float:
         """Coal state that holds the pit at ``pit_f``: 0..1, or above 1 if
-        the fire cannot reach it (not enough load left)."""
+        the fire cannot reach it (not enough load left). 0 with no fuel."""
+        capacity = self.params.q_max * self.power * BTU_PER_H
+        if capacity <= 0 or self.params.draft_min >= 1:
+            return 0.0  # nothing to burn, or a fan that makes no difference
         need = self.conductance(wind_mph) * (pit_f - t_amb) + q_food_btus
-        draft = need / (self.params.q_max * self.power * BTU_PER_H)
+        draft = need / capacity
         return (draft - self.params.draft_min) / (1.0 - self.params.draft_min)
 
 
@@ -159,12 +162,16 @@ class Cooker:
 
         # 1. the coals answer the air they are given
         air = plant.airflow(fan_duty, lid_open)
-        plant.fire += (air - plant.fire) * (1.0 - math.exp(-dt / p.tau_fire))
-        plant.fire = min(max(plant.fire, 0.0), 1.0)
+        fire0 = plant.fire
+        decay = math.exp(-dt / p.tau_fire)
+        plant.fire = min(max(air - (air - fire0) * decay, 0.0), 1.0)
+        # what the pit felt is the coals' time-average over the step, not
+        # their end value: that overstates the heat while the fire climbs
+        # (and understates it while it dies), by more the longer the step
+        mean_fire = air - (air - fire0) * (p.tau_fire / dt) * (1.0 - decay)
 
         # 2. heat released, capped by what is left to burn
-        q_fuel = plant.heat()
-        q_fuel = min(q_fuel, plant.fuel_btu / dt)
+        q_fuel = min(plant.heat(mean_fire), plant.fuel_btu / dt)
         plant.q_fuel = q_fuel
 
         # 3. the pit: exact solution for a constant input through a total

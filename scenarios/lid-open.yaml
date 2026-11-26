@@ -1,0 +1,28 @@
+# Mid-cook: the pit at 225 °F with a brisket in its stall. An hour in, the lid
+# comes off for three minutes. The pit drops, open-lid detect holds the fan,
+# and the pit finds its way back. Run with --set opendetect=false to see what
+# the detector is worth.
+name: lid-open
+description: An hour into a 225 °F hold, the lid comes off for three minutes.
+duration: 3h
+seed: 0
+controller: proportional
+ambient: 70
+wind_mph: 0
+
+cooker:
+  fuel_lb: 15
+
+start: {pit_f: 225}
+
+device:
+  cook_set: 225
+  food_set: {food1: 203}
+  cookhold: 180
+
+names: {cook: Pit, food1: Brisket}
+
+food:
+  food1: {cut: brisket, mass_lb: 12, temp_f: 160}
+
+lid_open: [[1h, 1h03m]]

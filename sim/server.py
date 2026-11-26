@@ -19,6 +19,12 @@ the way out. tests/sim/test_server.py holds the result against the captures,
 byte for byte. (There is no capture of ``email.xml``, so it goes out as the
 template writes it.)
 
+The templating of the main, control and system pages is an inference: those
+pages carry the settings the box had when they were captured, so
+``dev.fake_cyberq.py`` rewrites those literals from state on the assumption
+that the box does the same. It has not been checked against a live box;
+read-only GETs on one will confirm it.
+
 As in the fake, ``booting.htm`` (reboot) is accepted and *recorded only* —
 there is nothing here to reset — and ``GET /_log`` / ``DELETE /_log`` expose
 and clear the request log, for the dashboard's allowlist tests.
@@ -178,7 +184,8 @@ class WireState:
 
 
 def create_app(
-    sim: Simulator, *, speed: float = 1.0, poll_s: float = 0.02, crlf: bool = True
+    sim: Simulator, *, speed: float = 1.0, poll_s: float = 0.02, crlf: bool = True,
+    names: dict | None = None,
 ) -> FastAPI:
     """A FastAPI app that *is* a simulated CyberQ, driven by ``sim``.
 
@@ -186,8 +193,12 @@ def create_app(
     loop, so handlers and the model never run at the same time and need no
     locking. Nothing steps until the app's lifespan starts. ``crlf`` off
     serves the shared templates' LF endings instead of the device's.
+    ``names`` (probe -> name) is what the device calls its probes.
     """
-    wire = WireState(sim)
+    base = dict(fake_cyberq.DEFAULTS)
+    for probe, name in (names or {}).items():
+        base[f"{probe.upper()}_NAME"] = name
+    wire = WireState(sim, base)
     requests: list[dict] = []
     sim.clock = SimClock(t=sim.clock.t, speed=speed, realtime=True)
 

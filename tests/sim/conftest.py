@@ -9,6 +9,8 @@ a real port at high speed for the HTTP facade tests.
 
 from __future__ import annotations
 
+import dataclasses
+import pathlib
 import threading
 import time
 from typing import Sequence
@@ -16,14 +18,19 @@ from typing import Sequence
 import pytest
 import uvicorn
 
+from app import db as appdb
 from sim import server as sim_server
 from sim.device import CyberQDevice, DeviceSettings
 from sim.engine import Environment, Event, Simulator
-from sim.food import Food
+from sim.food import Food, preset
 from sim.plant import Cooker, Plant, PlantParams
 from sim.probes import Probe
 
 HOUR = 3600.0
+
+#: the cooker a recorded test cook was made with — deliberately not the defaults
+TRUTH = PlantParams(c_pit=60.0, ua_pit=90.0, q_max=26_000.0, tau_fire=300.0, draft_min=0.07)
+AIR_F = 68.0
 
 
 def build_sim(
@@ -77,6 +84,63 @@ def make_sim():
     return build_sim
 
 
+# -- recorded history ------------------------------------------------------------
+
+@dataclasses.dataclass(frozen=True)
+class Recording:
+    db: pathlib.Path
+    truth: PlantParams
+    ambient_f: float
+    samples: int
+    mtime: float = 0.0  # of the database file as written: it must not change by being read
+
+
+def record(path: pathlib.Path, sim: Simulator, start_ts: int = 1_790_000_000) -> int:
+    """Write a run's rows to the dashboard's samples table, as its poller
+    would have stored them. Returns the number of samples."""
+    conn = appdb.connect(str(path))
+    conn.executemany(
+        "INSERT INTO samples (ts, cook, food1, food2, food3, cook_set, food1_set, food2_set,"
+        " food3_set, output_pct, cook_status, food1_status, food2_status, food3_status,"
+        " timer, timer_status) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [
+            (
+                start_ts + round(row["t"]), row["cook"], row["food1"], row["food2"], row["food3"],
+                row["cook_set"], row["food1_set"], row["food2_set"], row["food3_set"],
+                row["output_pct"], row["cook_status"], row["food1_status"], row["food2_status"],
+                row["food3_status"], row["timer"], row["timer_status"],
+            )
+            for row in sim.rows
+        ],
+    )
+    conn.commit()
+    conn.close()
+    return len(sim.rows)
+
+
+@pytest.fixture(scope="module")
+def recording(tmp_path_factory) -> Recording:
+    """Three hours in the life of ``TRUTH``: a cold start toward 250 °F, then
+    225 °F from 2 h; a brisket on food1 throughout; food2 plugged in (with
+    nothing on it) at 1 h; food3 never. Sampled every 5 s like the poller."""
+    path = tmp_path_factory.mktemp("history") / "bbq.db"
+    sim = Simulator(
+        Cooker(Plant(TRUTH, t_amb=AIR_F), (Food(preset("brisket"), temp_f=40.0), None, None)),
+        [Probe(), Probe(), Probe(plugged=False), Probe(plugged=False)],
+        CyberQDevice(DeviceSettings(cook_set_f=250.0, food_set_f=[203.0, 180.0, 180.0])),
+        env=Environment(ambient_f=AIR_F),
+        events=[
+            Event(2 * HOUR, lambda s: s.device.set_cook_set_tenths(2250), "set 225"),
+            Event(1 * HOUR, lambda s: setattr(s.probe("food2"), "plugged", True), "plug food2"),
+        ],
+        sample_every=5,
+        seed=0,
+    )
+    sim.run(3 * HOUR)
+    samples = record(path, sim)
+    return Recording(path, TRUTH, AIR_F, samples, path.stat().st_mtime)
+
+
 @pytest.fixture()
 def serve_sim():
     """Factory: serve a simulator on an ephemeral port at ``speed``× real time
@@ -85,7 +149,8 @@ def serve_sim():
     started: list[tuple[uvicorn.Server, threading.Thread]] = []
 
     def _start(speed: float = 600.0, **kwargs) -> tuple[str, Simulator]:
-        sim = build_sim(max_rows=3600, **kwargs)
+        kwargs.setdefault("max_rows", 3600)
+        sim = build_sim(**kwargs)
         config = uvicorn.Config(
             sim_server.create_app(sim, speed=speed), host="127.0.0.1", port=0,
             log_level="warning", access_log=False,
