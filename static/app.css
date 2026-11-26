@@ -266,6 +266,20 @@ dialog input:focus { outline: 1px solid var(--accent); }
 .u-cursor-x, .u-cursor-y { border-color: #3a4149; }
 .u-select { background: rgba(255, 112, 67, 0.08); }
 
+/* chart hover popup */
+.chart-tip {
+  position: absolute; z-index: 10; pointer-events: none;
+  background: rgba(25, 28, 33, 0.96); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 9px; font-size: 12px; white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.chart-tip.hidden { display: none; }
+.chart-tip .tip-time { color: var(--text-muted); margin-bottom: 3px; }
+.chart-tip .tip-row { display: flex; align-items: center; gap: 6px; }
+.chart-tip .tip-row i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.chart-tip .tip-row span { color: var(--text-muted); flex: 1; }
+.chart-tip .tip-row b { font-variant-numeric: tabular-nums; margin-left: 10px; }
+
 footer {
   text-align: center;
   color: var(--text-muted);

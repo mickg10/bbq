@@ -17,7 +17,7 @@ services:
     environment:
       CYBERQ_URL: ${CYBERQ_URL:?set CYBERQ_URL in .env}
       DB_PATH: /data/bbq.db
-      POLL_INTERVAL: "5"
+      POLL_INTERVAL: ${POLL_INTERVAL:-5}
       # Off unless ALLOW_REBOOT=1 is set in the environment or .env.
       ALLOW_REBOOT: ${ALLOW_REBOOT:-0}
     ports:

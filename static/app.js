@@ -16,10 +16,10 @@ const PROBES = [
 const STATUS = ["OK", "HIGH", "LOW", "DONE", "ERROR", "HOLD", "ALARM", "SHUTDOWN"];
 
 const RANGES = {
-  "1h": { seconds: 3600, step: 30 },
-  "6h": { seconds: 3600 * 6, step: 60 },
-  "24h": { seconds: 3600 * 24, step: 300 },
-  cook: { seconds: null, step: 300 }, // from the active cook's start
+  "1h": { seconds: 3600, step: 5 },
+  "6h": { seconds: 3600 * 6, step: 30 },
+  "24h": { seconds: 3600 * 24, step: 120 },
+  cook: { seconds: null, step: 60 }, // from the active cook's start
 };
 
 const SERIES = [
@@ -280,8 +280,52 @@ async function endCook() {
 // history chart
 // ---------------------------------------------------------------------------
 
+/** Hover popup: time plus each series' value, in that series' colour.
+ * Series with no value at the cursor are left out. */
+function tooltipPlugin() {
+  let tip;
+  return {
+    hooks: {
+      init: (u) => {
+        tip = document.createElement("div");
+        tip.className = "chart-tip hidden";
+        u.over.appendChild(tip);
+        u.over.addEventListener("mouseleave", () => tip.classList.add("hidden"));
+      },
+      setCursor: (u) => {
+        const idx = u.cursor.idx;
+        if (idx === null || idx === undefined || u.cursor.left < 0) {
+          tip.classList.add("hidden");
+          return;
+        }
+        const rows = [];
+        SERIES.forEach((s, i) => {
+          const v = u.data[i + 1][idx];
+          if (v === null || v === undefined || !u.series[i + 1].show) return;
+          rows.push(
+            `<div class="tip-row"><i style="background:${s.color}"></i>` +
+            `<span>${s.label}</span><b style="color:${s.color}">${v.toFixed(1)} °F</b></div>`
+          );
+        });
+        if (!rows.length) { tip.classList.add("hidden"); return; }
+        const when = new Date(u.data[0][idx] * 1000).toLocaleString([], {
+          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
+        });
+        tip.innerHTML = `<div class="tip-time">${when}</div>${rows.join("")}`;
+        tip.classList.remove("hidden");
+        const { left, top } = u.cursor;
+        const w = tip.offsetWidth, h = tip.offsetHeight;
+        const ow = u.over.clientWidth, oh = u.over.clientHeight;
+        tip.style.left = `${left + 14 + w > ow ? left - w - 14 : left + 14}px`;
+        tip.style.top = `${Math.max(0, Math.min(top - h / 2, oh - h))}px`;
+      },
+    },
+  };
+}
+
 function chartOptions() {
   return {
+    plugins: [tooltipPlugin()],
     width: Math.min($("chart").clientWidth || 900, 1040),
     height: 360,
     cursor: { drag: { x: true, y: false } },
@@ -728,7 +772,7 @@ function start() {
   setInterval(loadConfig, 60000);
   setInterval(() => {
     if (document.visibilityState === "visible") loadHistory();
-  }, 60000);
+  }, 15000);
 }
 
 start();

@@ -111,6 +111,7 @@ HOST_PORT=8080
 DATA_DIR=/srv/bbq              # SQLite history (WAL)
 CYBERQ_URL=http://192.0.2.6 # your CyberQ (TEST-NET example)
 ALLOW_REBOOT=0                 # 1 shows the confirm-gated reboot
+POLL_INTERVAL=5                # seconds between device reads (2 is fine for a CyberQ)
 ```
 
 ```sh
