@@ -130,7 +130,7 @@ def _run(args: argparse.Namespace) -> int:
     results = [run_scenario(s, sample_every=max(1, round(args.sample / args.dt)), dt=args.dt) for s in scenarios]
     if not args.quiet:
         if many:
-            print(format_table([result.summary for result in results]))
+            print(format_table([result.summary for result in results], legend=not args.no_legend))
         else:
             print(format_summary(results[0].summary))
     for result in results:
@@ -378,6 +378,10 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--out-dir", metavar="DIR", help="write each run's time series there")
     run.add_argument("--json", metavar="FILE", help="write the summaries as JSON")
     run.add_argument("--quiet", "-q", action="store_true", help="print nothing but the files written")
+    run.add_argument(
+        "--no-legend", action="store_true",
+        help="leave out the lines under a table that say what each column means",
+    )
     run.set_defaults(handler=_run)
 
     serve = sub.add_parser("serve", help="serve a live simulated CyberQ over HTTP")

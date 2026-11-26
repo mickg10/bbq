@@ -52,9 +52,13 @@ def test_run_scorecard_for_every_law_on_a_scenario(capsys):
                  "--duration", "30m", "--dt", "5"])
     assert code == 0
     lines = _run(capsys).splitlines()
-    assert lines[0].split()[:2] == ["scenario", "controller"]
-    assert [line.split()[1] for line in lines[2:]] == ["proportional", "bias", "pi"]
-    assert all(line.startswith("ribs-6h ") for line in lines[2:])
+    assert lines[0].split()[:3] == ["scenario", "controller", "reached"]
+    assert [line.split()[1] for line in lines[2:5]] == ["proportional", "bias", "pi"]
+    assert all(line.startswith("ribs-6h ") for line in lines[2:5])
+    assert lines[5].startswith("reached set: when the pit reading first reached the setpoint")  # the legend
+    assert main(["run", "ribs-6h", "--controller", "proportional,pi", "--duration", "30m", "--dt", "5",
+                 "--no-legend"]) == 0
+    assert len(_run(capsys).splitlines()) == 4
 
 
 def test_run_with_no_scenario_is_the_whole_scorecard(tmp_path, capsys):

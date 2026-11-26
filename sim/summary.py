@@ -12,15 +12,17 @@
 * **fan** — the mean demand over the run, and over that stretch;
 * **fuel** — what burned, and what is left.
 
-These are measured against the *effective* setpoint in force for the longest
-time (after ramp and cook hold), and on the reading rather than the true
-temperature: this is what the device would have shown.
+These are measured against the setpoint the food was cooked at — the one in
+force for the longest time outside cook hold (after ramp) — and on the
+reading rather than the true temperature: this is what the device would
+have shown.
 """
 
 from __future__ import annotations
 
 import math
 import statistics
+import textwrap
 from collections import Counter
 from typing import Sequence
 
@@ -92,8 +94,14 @@ def summarize(
     step = rows[1]["t"] - rows[0]["t"] if len(rows) > 1 else rows[0]["t"]
 
     cook = [row["cook"] for row in rows]
-    # the setpoint in force for the longest time, to the wire's resolution
-    reference = Counter(round(row["setpoint_f"], 1) for row in rows).most_common(1)[0][0]
+    # the setpoint to measure against is the one the food was cooked at: the
+    # most common *outside* cook hold. Hold is a different target on purpose,
+    # and in a long-enough run it is in force longest — measuring against it
+    # called 70 °F of perfectly good hold "overshoot".
+    cooking = [row for row in rows if row["cook_status"] != Status.HOLD]
+    reference = Counter(
+        round(row["setpoint_f"], 1) for row in (cooking if cooking else rows)
+    ).most_common(1)[0][0]
     in_force = [abs(row["setpoint_f"] - reference) < 0.05 for row in rows]
     seen = [in_force[i] and cook[i] is not None for i in range(len(rows))]
 
@@ -266,8 +274,20 @@ def format_summary(summary: dict) -> str:
 
 
 _TABLE_HEAD = (
-    "scenario", "controller", "to set", "overshoot °F", "settled at", "held for",
+    "scenario", "controller", "reached set", "overshoot °F", "settled at", "held for",
     "steady err °F", "fan mean %", "fan held %", "fuel lb", "food1 done", "notes",
+)
+
+#: printed under a table, so it explains itself: "settled" is a plateau and
+#: may come before the setpoint is first reached
+_LEGEND = (
+    "reached set: when the pit reading first reached the setpoint (–: never). "
+    "settled at / held for: the longest stretch, at least 30 min, over which the reading stayed "
+    "inside a 10 °F span, and when it began — a plateau, which for the documented law sits below "
+    "the setpoint, so it can precede \"reached set\". "
+    "steady err: mean reading minus setpoint over that stretch. "
+    "fan mean / fan held: average demand over the run / over that stretch. "
+    "food1 done: when that probe first reported DONE (–: never; no probe: none plugged in)."
 )
 
 
@@ -284,9 +304,10 @@ def _cells(summary: dict) -> tuple:
     )
 
 
-def format_table(summaries: Sequence[dict]) -> str:
+def format_table(summaries: Sequence[dict], *, legend: bool = True) -> str:
     """Runs side by side, one line each, for comparing controllers on a
-    scenario — or scenarios under a controller."""
+    scenario — or scenarios under a controller. ``legend`` adds the lines
+    under the table that say what each column means."""
     if not summaries:
         return "(nothing to compare)"
     rows = [_cells(summary) for summary in summaries]
@@ -299,4 +320,8 @@ def format_table(summaries: Sequence[dict]) -> str:
         return "  ".join(cell.ljust(width) for cell, width in zip(cells, widths)).rstrip()
 
     rule = line(tuple("-" * width for width in widths))
-    return "\n".join([line(_TABLE_HEAD), rule, *(line(row) for row in rows)])
+    table = "\n".join([line(_TABLE_HEAD), rule, *(line(row) for row in rows)])
+    if not legend:
+        return table
+    width = max(100, len(table.splitlines()[0]))
+    return table + "\n" + "\n".join(textwrap.wrap(_LEGEND, width))

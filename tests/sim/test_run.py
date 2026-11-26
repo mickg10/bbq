@@ -103,6 +103,27 @@ def test_summary_measures_against_the_setpoint_in_force_the_longest():
     assert s["final"]["setpoint_f"] == 180.0 and s["final"]["cook_f"] == 180.0
 
 
+def test_cook_hold_is_not_the_setpoint_even_when_it_lasts_longest():
+    """Regression: the hold is a different target on purpose. In a run where
+    it outlasts the cook, the cook's temperature was still what 'the setpoint'
+    meant — otherwise 70 °F of perfectly good hold read as overshoot."""
+    rows = _heat_up(40, top=250.0) + _minutes(120, 250.0, 40, fan=40) + _minutes(300, 180.0, 160, setpoint=180.0, fan=0)
+    for row in rows[:160]:
+        row.update(setpoint_f=250.0, cook_set=250.0)
+    for row in rows[160:]:
+        row["cook_status"] = 5  # HOLD
+    s = summarize(rows, fuel0_btu=1.0)
+    assert s["setpoint_f"] == 250.0  # 160 rows of cook against 300 of hold
+    assert s["overshoot_f"] == 0.0 and s["to_setpoint_s"] == pytest.approx(39 * STEP)
+    assert s["steady_error_f"] == pytest.approx(0.0, abs=1e-6) and s["held_s"] == pytest.approx(121 * STEP)
+    assert s["final"]["setpoint_f"] == 180.0 and "HOLD" in s["cook_status_s"]
+    # a run that is nothing but hold still gets a reference
+    only = _minutes(60, 180.0, fan=0, setpoint=180.0)
+    for row in only:
+        row["cook_status"] = 5
+    assert summarize(only, fuel0_btu=1.0)["setpoint_f"] == 180.0
+
+
 def test_summary_says_where_the_documented_law_settled_short():
     """The baseline parks a fraction of a band under the setpoint. That is
     'settled' too — and the steady error says how far short."""
@@ -196,13 +217,27 @@ def test_format_summary_and_table():
     assert text.startswith("ribs-6h · proportional · 2h run, setpoint 250 °F")
     assert "reached setpoint –" in text and "steady error " in text
     assert "fan mean " in text and "fuel burned " in text and "cook status:" in text
-    table = format_table([r.summary for r in (_run("ribs-6h", c, dt=5.0) for c in ("proportional", "pi"))])
-    lines = table.splitlines()
-    assert lines[0].split()[:4] == ["scenario", "controller", "to", "set"] and set(lines[1]) <= {"-", " "}
+    summaries = [r.summary for r in (_run("ribs-6h", c, dt=5.0) for c in ("proportional", "pi"))]
+    lines = format_table(summaries, legend=False).splitlines()
+    assert lines[0].split()[:5] == ["scenario", "controller", "reached", "set", "overshoot"]
+    assert set(lines[1]) <= {"-", " "}
     assert len(lines) == 4 and all(line.startswith("ribs-6h ") for line in lines[2:])
-    assert format_table([]) == "(nothing to compare)"
-    for line in lines:
-        assert len(line) < 240
+    assert format_table([], legend=False) == "(nothing to compare)"
+    assert all(len(line) < 240 for line in lines)
+
+
+def test_the_table_explains_itself():
+    """A plateau can precede the first touch of the setpoint; without the
+    legend that reads as a bug."""
+    summaries = [_run("ribs-6h", c, dt=5.0).summary for c in ("proportional", "pi")]
+    bare = format_table(summaries, legend=False).splitlines()
+    with_legend = format_table(summaries).splitlines()
+    assert with_legend[:len(bare)] == bare and len(with_legend) > len(bare)
+    legend = " ".join(with_legend[len(bare):])
+    assert "first reached the setpoint (–: never)" in legend
+    assert "inside a 10 °F span" in legend and 'so it can precede "reached set"' in legend
+    assert "steady err: mean reading minus setpoint" in legend
+    assert all(len(line) <= max(100, len(bare[0])) for line in with_legend)
 
 
 # -- run_scenario and its CSV -----------------------------------------------------
@@ -293,7 +328,7 @@ def test_the_controller_scorecard_separates_the_three_laws():
     assert by_law["proportional"]["steady_error_f"] == pytest.approx(-9.6, abs=0.5)
     assert 5.0 < by_law["bias"]["overshoot_f"] < 11.0 and abs(by_law["bias"]["steady_error_f"]) < 1.5
     assert by_law["pi"]["overshoot_f"] < 3.5 and abs(by_law["pi"]["steady_error_f"]) < 1.0
-    table = format_table(results)
+    table = format_table(results, legend=False)
     assert [line.split()[1] for line in table.splitlines()[2:]] == ["proportional", "bias", "pi"]
 
 
