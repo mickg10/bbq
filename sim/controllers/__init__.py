@@ -24,16 +24,20 @@ def register(cls: type) -> type:
     return cls
 
 
-def get_controller(name: str):
-    """A fresh controller by name (``proportional``, ``firmware``)."""
+def get_controller(name: str, **options):
+    """A fresh controller by name (``proportional``, ``pi``, ``firmware``).
+
+    ``options`` go to its constructor — e.g. ``bias_pct=15`` or ``ki=0.4``.
+    """
     from sim.controllers import firmware, proportional  # noqa: F401  (register)
 
     try:
-        return CONTROLLERS[name]()
+        cls = CONTROLLERS[name]
     except KeyError as exc:
         raise ValueError(
             f"unknown controller {name!r}; choose from {sorted(CONTROLLERS)}"
         ) from exc
+    return cls(**options)
 
 
 __all__ = [

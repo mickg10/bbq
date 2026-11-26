@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from sim.controllers import get_controller
 from sim.device import Status
 from sim.engine import Event, Simulator
 from sim.food import Food, preset
@@ -137,6 +138,27 @@ def test_ambient_can_follow_a_schedule(make_sim):
     )
     sim.run(HOUR)
     assert [round(r["t_amb"], 1) for r in sim.rows] == [65.0, 60.0, 55.0, 50.0, 45.0, 40.0]
+
+
+# -- controller variants in the loop ------------------------------------------
+
+def test_the_pi_variant_closes_the_offset_the_documented_law_leaves(make_sim):
+    documented = make_sim(preheat=215.0, cook_set_f=225.0, sample_every=600)
+    integral = make_sim(
+        preheat=215.0, cook_set_f=225.0, sample_every=600, controller=get_controller("pi"),
+    )
+    documented.run(3 * HOUR)
+    integral.run(3 * HOUR)
+    assert abs(documented.rows[-1]["pit_f"] - 215.0) < 1.0  # a third of a band under
+    assert abs(integral.rows[-1]["pit_f"] - 225.0) < 0.5
+    assert max(r["pit_f"] for r in integral.rows) < 227.0    # and no overshoot getting there
+
+
+def test_pi_from_cold_overshoots_a_little_and_settles_on_target(make_sim):
+    sim = make_sim(cook_set_f=225.0, sample_every=300, controller=get_controller("pi"))
+    sim.run(4 * HOUR)
+    assert abs(sim.rows[-1]["pit_f"] - 225.0) < 0.5
+    assert 225.0 < max(r["pit_f"] for r in sim.rows) < 232.0
 
 
 # -- events -------------------------------------------------------------------

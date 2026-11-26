@@ -194,10 +194,81 @@ def test_probe_noise_never_trips_the_detector_even_at_the_very_start():
     assert all(out.fan_pct > 0 for out in outs)  # 10 °F under target, in the band
 
 
+# -- bias and the pi variant --------------------------------------------------
+
+def test_bias_lifts_the_whole_curve():
+    assert proportional_demand(30.0, 30.0) == 100
+    assert proportional_demand(30.0, 30.0, bias_pct=20.0) == 100  # already flat out
+    assert proportional_demand(0.0, 30.0, bias_pct=20.0) == 20    # at target it remains
+    assert proportional_demand(-3.0, 30.0, bias_pct=20.0) == 10   # 3 over: 20 − 10
+    assert proportional_demand(-9.0, 30.0, bias_pct=20.0) == 0
+    assert proportional_demand(5.0, 0.0, bias_pct=50.0) == 100    # on/off ignores it
+
+
+def test_the_documented_law_is_unbiased_by_default():
+    assert get_controller("proportional").bias_pct == 0.0
+    assert get_controller("proportional", bias_pct=15.0).bias_pct == 15.0
+    assert get_controller("pi").ki == 0.1 and get_controller("pi", ki=0.4).ki == 0.4
+    with pytest.raises(ValueError):
+        get_controller("pi", ki=-1.0)
+
+
+def _minutes(law, cfg, temp, minutes, t):
+    for _ in range(minutes):
+        out = law.step(t, temp, NO_FOOD, cfg)
+        t += 60.0
+    return out, t
+
+
+def test_pi_stops_accumulating_while_the_proportional_term_is_flat_out():
+    law = get_controller("pi", ki=100.0)  # a huge gain, to make the point quickly
+    out, _ = _minutes(law, _cfg(), 150.0, 600, 0.0)  # 75 below target all along
+    assert out.fan_pct == 100 and law.integral == 0.0  # nothing wound up
+
+
+def test_pi_integral_is_clamped_and_unwinds():
+    law = get_controller("pi", ki=6.0)  # % per °F per minute
+    cfg = _cfg(propband_f=1000.0)       # a very wide band: almost pure integral
+    out, t = _minutes(law, cfg, 220.0, 100, 0.0)  # 100 minutes 5 °F below
+    assert law.integral == 100.0        # 3000 without the clamp
+    assert out.fan_pct == 100
+    out, _ = _minutes(law, cfg, 230.0, 100, t)    # 100 minutes 5 °F above
+    assert law.integral == 0.0 and out.fan_pct == 0
+
+
+def test_pi_is_frozen_while_the_lid_hold_has_the_fan_off():
+    law = get_controller("pi", ki=6.0)
+    cfg = _cfg(propband_f=1000.0)
+    _, t = _minutes(law, cfg, 223.0, 6, 0.0)  # six calls, five minutes of drift: 5 × 12
+    assert law.integral == pytest.approx(60.0)
+    for k in range(1, 61):  # a lid-open drop
+        out = law.step(t, 223.0 - 0.5 * k, NO_FOOD, cfg)
+        t += 1.0
+    assert out.lid_hold
+    frozen = law.integral
+    out, _ = _minutes(law, cfg, 193.0, 2, t)
+    assert out.lid_hold and frozen > 60.0
+    assert law.integral == frozen
+
+
+def test_pi_reset_and_on_off():
+    law = get_controller("pi", ki=6.0)
+    cfg = _cfg(propband_f=1000.0)
+    _, _ = _minutes(law, cfg, 220.0, 5, 0.0)
+    assert law.integral > 0
+    law.reset()
+    assert law.integral == 0.0
+    bang_bang = _cfg(propband_f=0.0)
+    assert law.step(0.0, 150.0, NO_FOOD, bang_bang).fan_pct == 100
+    assert law.step(60.0, 226.0, NO_FOOD, bang_bang).fan_pct == 0
+    assert law.integral == 0.0
+
+
 # -- the plug-in registry -----------------------------------------------------
 
 def test_controllers_are_found_by_name():
     assert get_controller("proportional").name == "proportional"
+    assert get_controller("pi").name == "pi"
     assert get_controller("firmware").name == "firmware"
     with pytest.raises(ValueError):
         get_controller("pid")
