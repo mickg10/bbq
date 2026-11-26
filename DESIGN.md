@@ -5,7 +5,7 @@ Private-network web GUI and API for the BBQ Guru CyberQ WiFi (FW 3.1). It shows 
 
 ## Architecture
 ```
-browser (tailnet) ──> bbq container :8080 (bound to the tailscale IP only)
+browser (private network) ──> bbq container :8080 (bound to BIND_IP only)
                         ├─ FastAPI: /api/*, static UI
                         ├─ poller task: GET /all.xml every 5 s ──> SQLite (WAL)
                         └─ device client: ALLOWLISTED form POSTs ──> CyberQ :80 (CYBERQ_URL)

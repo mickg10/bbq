@@ -41,7 +41,7 @@ No test ever touches the real device: everything runs against `dev/fake_cyberq.p
 
 | Env             | Default                 | Meaning                                   |
 |-----------------|-------------------------|-------------------------------------------|
-| `CYBERQ_URL`    | `http://192.168.17.6` (set yours) | device base URL                           |
+| `CYBERQ_URL`    | **required** — e.g. `http://192.0.2.6` | device base URL (no default: the app fails fast when unset) |
 | `DB_PATH`       | `bbq.db` (`/data/bbq.db` in the container) | SQLite file            |
 | `POLL_INTERVAL` | `5`                     | seconds between polls; `0` disables the loop |
 | `CONFIG_TTL`    | `30`                    | seconds to cache `/api/config`            |
@@ -79,7 +79,7 @@ Run it on a host on the same LAN as the controller. Create a `.env` next to
 BIND_IP=100.x.y.z              # e.g. the host's Tailscale IP; never 0.0.0.0
 HOST_PORT=8080
 DATA_DIR=/srv/bbq              # SQLite history (WAL)
-CYBERQ_URL=http://192.168.1.50 # your CyberQ
+CYBERQ_URL=http://192.0.2.6 # your CyberQ (TEST-NET example)
 ALLOW_REBOOT=0                 # 1 shows the confirm-gated reboot
 ```
 

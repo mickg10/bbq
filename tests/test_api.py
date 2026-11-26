@@ -38,6 +38,16 @@ def test_healthz(make_app) -> None:
         assert client.get("/healthz").json() == {"ok": True}
 
 
+def test_app_requires_cyberq_url(tmp_path) -> None:
+    """No default device address: startup fails fast with a clear error
+    when CYBERQ_URL is unset (nothing to clean up — the check runs before
+    the DB or the client is created)."""
+    settings = Settings(env={"DB_PATH": str(tmp_path / "x.db"), "POLL_INTERVAL": "0"})
+    with pytest.raises(RuntimeError, match="CYBERQ_URL"):
+        with TestClient(create_app(settings)):
+            pass
+
+
 def test_status_lazy_seed(make_app) -> None:
     with TestClient(make_app()) as client:
         response = client.get("/api/status")

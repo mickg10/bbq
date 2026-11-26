@@ -5,7 +5,7 @@
 #   BIND_IP=100.x.y.z      address to publish on (required)
 #   HOST_PORT=8080         host port
 #   DATA_DIR=/srv/bbq      host directory for the SQLite history
-#   CYBERQ_URL=http://192.168.1.50   the controller on your LAN
+#   CYBERQ_URL=http://192.0.2.6   the controller on your LAN (TEST-NET example)
 #   ALLOW_REBOOT=1         show the confirm-gated reboot (default off)
 
 services:

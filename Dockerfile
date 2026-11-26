@@ -15,7 +15,6 @@ RUN pip install --no-cache-dir .
 
 ENV PYTHONPATH=/srv/bbq \
     DB_PATH=/data/bbq.db \
-    CYBERQ_URL=http://192.168.17.6 \
     POLL_INTERVAL=5
 
 EXPOSE 8080

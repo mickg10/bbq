@@ -3,7 +3,8 @@ extended to the scope update: all four config sections, per-section PATCHes,
 email test, wifi scan, and a flag-gated reboot).
 
 Environment:
-- CYBERQ_URL    base URL of the device (default http://192.168.17.6)
+- CYBERQ_URL    base URL of the device — REQUIRED, no default: the app
+                fails fast at startup when it is unset
 - DB_PATH       SQLite path (default bbq.db; /data/bbq.db in the container)
 - POLL_INTERVAL seconds between /all.xml polls (default 5; 0 disables the
                 background loop — tests then drive poll_once via /api/status)
@@ -58,7 +59,7 @@ _SECRET_KEYS = {
 class Settings:
     def __init__(self, env: dict[str, str] | None = None) -> None:
         env = env if env is not None else os.environ
-        self.cyberq_url = env.get("CYBERQ_URL", "http://192.168.17.6")
+        self.cyberq_url = env.get("CYBERQ_URL", "").strip()
         self.db_path = env.get("DB_PATH", "bbq.db")
         self.poll_interval = float(env.get("POLL_INTERVAL", "5"))
         self.config_ttl = float(env.get("CONFIG_TTL", "30"))
@@ -72,6 +73,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        if not settings.cyberq_url:
+            # Fail fast with a clear message: no accidental default device.
+            raise RuntimeError(
+                "CYBERQ_URL is not set — point it at the CyberQ, "
+                "e.g. CYBERQ_URL=http://192.0.2.6"
+            )
         conn = db.connect(settings.db_path)
         client = CyberQClient(settings.cyberq_url, allow_reboot=settings.allow_reboot)
         poller = Poller(client, conn, interval=settings.poll_interval)

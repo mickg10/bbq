@@ -2,7 +2,8 @@
 
 The fake (dev.fake_cyberq) runs as a real uvicorn server in a thread, so
 the device client's httpx traffic is exercised exactly as it would be
-against 192.168.17.6 — including the request log the allowlist tests
+against the real device at its CYBERQ_URL (for example
+http://192.0.2.6) — including the request log the allowlist tests
 assert on.
 """
 

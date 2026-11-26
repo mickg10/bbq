@@ -869,11 +869,13 @@ class CyberQClient:
 
     def __init__(
         self,
-        base_url: str = "http://192.168.17.6",
+        base_url: str,
         timeout: float = 5.0,
         client: httpx.AsyncClient | None = None,
         allow_reboot: bool = False,
     ) -> None:
+        """``base_url`` is required on purpose: there is no default device
+        address, so callers must state where the CyberQ lives."""
         self._client = client or httpx.AsyncClient(base_url=base_url, timeout=timeout)
         self._allow_reboot = allow_reboot
 

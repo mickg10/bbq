@@ -1,4 +1,4 @@
-"""bbq — tailnet-only dashboard and API for the BBQ Guru CyberQ WiFi.
+"""bbq — private-network dashboard and API for the BBQ Guru CyberQ WiFi.
 
 Safety invariants for this package (see DESIGN.md):
 - No raw proxying of requests to the device; only allowlisted reads and
