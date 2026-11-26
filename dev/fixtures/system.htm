@@ -1,0 +1,120 @@
+<html>
+<head>
+
+<style type="text/css">
+   *
+   {
+      font-family: Arial;
+   }
+   body
+   {
+      background-color: #FFFFFF;
+   }
+   table
+   {
+      border-collapse: collapse;
+   }
+   table, th, td
+   {
+      border: 1px solid black;
+   }
+   th
+   {
+      background-color: #CCCCCC;
+   }
+   td
+   {
+      padding: 5px;
+   }
+   .top table, .top th, .top td
+   {
+      border: 0px;
+   }
+   .noborder table, .noborder th, .noborder td
+   {
+      border: 0px;
+   }
+</style>
+
+<script type="text/javascript">
+function initForm()
+{
+   document.mainForm.MENU_SCROLLING.selectedIndex = 0;
+   document.mainForm.LCD_BACKLIGHT.value = 50;
+   document.mainForm.LCD_CONTRAST.value = 10;
+   document.mainForm.DEG_UNITS.selectedIndex = 1;
+   document.mainForm.ALARM_BEEPS.selectedIndex = 0;
+   document.mainForm.KEY_BEEPS.selectedIndex = 0;
+}
+</script>
+ 
+<title>CyberQ Wifi Temperature Controller - System Setup</title>
+</head>
+
+<body onload="initForm();">
+<input type="hidden" name="EEAUTOFLUSH" value="0">
+
+<H2>System Setup</H2>
+
+<form name="mainForm" method="POST">
+
+<p>
+<table width=600>
+<tr>
+   <th width=25%>Scrolling</th>
+   <td width=75%><select name="MENU_SCROLLING"><option value=0>Off</option><option value=1>On</option></select></td>
+</tr>
+<tr>
+   <th>LCD Backlight</th>
+   <td><input type="text" maxlength=3 name="LCD_BACKLIGHT" size=4>&nbsp;%</td>
+</tr>
+<tr>
+   <th>LCD Contrast</th>
+   <td><input type="text" maxlength=3 name="LCD_CONTRAST" size=4>&nbsp;%</td>
+</tr>
+<tr>
+   <th>Units</th>
+   <td><select name="DEG_UNITS"><option value=0>Deg C</option><option value=1>Deg F</option></select></td>
+</tr>
+<tr>
+   <th>Alarm Beeps</th>
+   <td>
+      <select name="ALARM_BEEPS">
+         <option value=0>Off</option>
+         <option value=1>1</option>
+         <option value=2>2</option>
+         <option value=3>3</option>
+         <option value=4>4</option>
+         <option value=5>5</option>
+      </select>
+   </td>
+</tr>
+<tr>
+   <th>Key Beeps</th>
+   <td><select name="KEY_BEEPS"><option value=0>Off</option><option value=1>On</option></select></td>
+</tr>
+</table>
+</p>
+
+<input type="hidden" name="EEAUTOFLUSH" value="1">
+
+<div class="noborder">
+<p><TABLE BORDER=0><TR><TD><input type="submit" value="Submit Values"/></TD><TD><input value="Cancel Changes" type="button" onclick="initForm();"/></TD></form><form action="reboot.htm"><TD><input type="submit" value="Reboot Device"></TD></form></TABLE></P>
+</div>
+
+<div class="top">
+  <table border="0">
+    <tr>
+      <td>
+        <A HREF="/"><img src="logo.jpg" align="left" width="125" height="150" border=0/></A>
+      </td>
+      <td valign="bottom">
+        <H1>CyberQ Wifi Temperature Controller</H1>
+        <a href="/">Main Screen</A> | <a href="system.htm">System Setup</A> | <a href="control.htm">Control Setup</A> | <a href="wifi.htm">WIFI Setup</A> | <a href="email.htm">Email Alerts</A>
+      </td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>

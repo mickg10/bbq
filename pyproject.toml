@@ -1,0 +1,30 @@
+[project]
+name = "bbq"
+version = "0.1.0"
+description = "Tailnet-only dashboard and API for the BBQ Guru CyberQ WiFi. No raw proxy; firmware/factory reset is never implemented."
+readme = "DESIGN.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "httpx>=0.27",
+    "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "python-multipart>=0.0.9",
+]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

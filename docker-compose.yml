@@ -1,0 +1,35 @@
+# BBQ: CyberQ WiFi dashboard stack.
+#
+# Publish the port on a private interface only (for example your Tailscale
+# IP), never 0.0.0.0. Set the values in a `.env` file next to this file:
+#   BIND_IP=100.x.y.z      address to publish on (required)
+#   HOST_PORT=8080         host port
+#   DATA_DIR=/srv/bbq      host directory for the SQLite history
+#   CYBERQ_URL=http://192.168.1.50   the controller on your LAN
+#   ALLOW_REBOOT=1         show the confirm-gated reboot (default off)
+
+services:
+  bbq:
+    build: .
+    image: bbq:latest
+    container_name: bbq
+    restart: unless-stopped
+    environment:
+      CYBERQ_URL: ${CYBERQ_URL:?set CYBERQ_URL in .env}
+      DB_PATH: /data/bbq.db
+      POLL_INTERVAL: "5"
+      # Off unless ALLOW_REBOOT=1 is set in the environment or .env.
+      ALLOW_REBOOT: ${ALLOW_REBOOT:-0}
+    ports:
+      - "${BIND_IP:?set BIND_IP in .env}:${HOST_PORT:-8080}:8080"
+    volumes:
+      - ${DATA_DIR:-./data}:/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3

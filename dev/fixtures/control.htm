@@ -1,0 +1,215 @@
+<html>
+<head>
+
+<style type="text/css">
+   *
+   {
+      font-family: Arial;
+   }
+   body
+   {
+      background-color: #FFFFFF;
+   }
+   table
+   {
+      border-collapse: collapse;
+   }
+   table, th, td
+   {
+      border: 1px solid black;
+   }
+   th
+   {
+      background-color: #CCCCCC;
+   }
+   td
+   {
+      padding: 5px;
+   }
+   .top table, .top th, .top td
+   {
+      border: 0px;
+   }
+   .noborder table, .noborder th, .noborder td
+   {
+      border: 0px;
+   }
+</style>
+
+<script type="text/javascript">
+var displayInF=1;
+
+function DegUnitsChar()
+{
+   var unit;
+   
+   if (!displayInF)
+   {
+      unit = 'C';
+   }
+   else
+   {
+      unit = 'F';
+   }
+   
+   return unit;
+}
+
+// convert web from base F or C to PIC's tenth F.
+// if no32 is set, then don't add the 32F when converting.
+function TempHTMLToPIC(temp, no32)
+{
+   if (!displayInF)
+   {
+      temp *= 9;
+      temp /= 5;
+      
+      if (!no32)
+      {
+         temp += 32;
+      }
+   }
+   
+   temp *= 10;
+   
+   temp = Math.round(temp);
+   
+   temp /= 10;
+      
+   return temp;
+}
+
+// convert PIC's temp in tenths F to base F or C.
+// if no32 is set, then don't minus 32F when converting
+function TempPICToHTML(temp, no32)
+{
+   if (!displayInF)
+   {
+      if (!no32)
+      {
+         temp -= 320;
+      }
+      temp *= 5;
+      temp /= 9;
+   }
+   
+   temp = Math.round(temp);
+   
+   temp /= 10;
+
+   return temp;
+}
+
+function initForm()
+{
+   document.mainForm.TIMEOUT_ACTION.selectedIndex = 0;
+   document.mainForm._COOKHOLD.value = TempPICToHTML(2000, 0);
+   document.mainForm._ALARMDEV.value = TempPICToHTML(500, 1);
+   document.mainForm.COOK_RAMP.selectedIndex = 0;
+   document.mainForm.OPENDETECT.selectedIndex = 1;
+   document.mainForm.CYCTIME.value = 6;
+   document.mainForm._PROPBAND.value = TempPICToHTML(300, 1);
+}
+
+function submitForm()
+{
+   var fixedForm = document.mainForm;
+   
+   fixedForm.COOKHOLD.value = TempHTMLToPIC(fixedForm._COOKHOLD.value, 0);
+   fixedForm.ALARMDEV.value = TempHTMLToPIC(fixedForm._ALARMDEV.value, 1);
+   fixedForm.PROPBAND.value = TempHTMLToPIC(fixedForm._PROPBAND.value, 1);
+	
+	fixedForm.submit();
+}
+</script>
+ 
+<title>CyberQ Wifi Temperature Controller - Control Setup</title>
+</head>
+
+<body onload="initForm('');">
+
+<H2>Control Setup</H2>
+
+<form name="mainForm" method="POST">
+<input type="hidden" name="EEAUTOFLUSH" value="0">
+
+<!--javascript will provide values to this on submit-->
+<input type="hidden" name="COOKHOLD" value="0">
+<input type="hidden" name="PROPBAND" value="0">
+<input type="hidden" name="ALARMDEV" value="0">
+
+<p><table width=600>
+<tr>
+   <th width=25%>Cook Hold</th>
+   <td width=75%><input type="text" name="_COOKHOLD" maxlength=5 size=6>&nbsp;<script>document.write(DegUnitsChar())</script></td>
+</tr>
+<tr>
+   <th>Timeout Action</th>
+   <td>
+      <select name="TIMEOUT_ACTION">
+         <option value=0>No Action</option>
+         <option value=1>Hold</option>
+         <option value=2>Alarm</option>
+         <option value=3>Shutdown</option>
+      </select>
+   </td>
+</tr>
+<tr>
+   <th>Alarm Dev</th>
+   <td><input type="text" name="_ALARMDEV" maxlength=5 size=6>&nbsp;<script>document.write(DegUnitsChar())</script></td>
+</tr>
+<tr>
+   <th>Ramp</th>
+   <td>
+      <select name="COOK_RAMP">
+         <option value=0>Off</option>
+         <option value=1>Food 1 (Food1)</option>
+         <option value=2>Food 2 (Food2)</option>
+         <option value=3>Food 3 (Food3)</option>
+      </select>
+   </td>
+</tr>
+<tr>
+   <th>Open Detect</th>
+   <td>
+      <select name="OPENDETECT">
+         <option value=0>Off</option>
+         <option value=1>On</option>
+      </select>
+   </td>
+</tr>
+<tr>
+   <th>Cyc Time</th>
+   <td><input type="text" name="CYCTIME" maxlength=2 size=3></td>
+</tr>
+<tr>
+   <th>Prop Band</th>
+   <td><input type="text" name="_PROPBAND" maxlength=5 size=6>&nbsp;<script>document.write(DegUnitsChar())</script></td>
+</tr>
+</table>
+</p>
+
+<input type="hidden" name="EEAUTOFLUSH" value="1">
+
+<div class="noborder">
+<p><TABLE BORDER=0><TR><TD><input type="button" value="Submit Values" onclick="submitForm()"/></TD><TD><input value="Cancel Changes" type="button" onclick="initForm();"/></TD></form><form action="reboot.htm"><TD><input type="submit" value="Reboot Device"></TD></form></TABLE></P>
+</div>
+
+</form>
+
+<div class="top">
+  <table border="0">
+    <tr>
+      <td>
+        <A HREF="/"><img src="logo.jpg" align="left" width="125" height="150" border=0/></A>
+      </td>
+      <td valign="bottom">
+        <H1>CyberQ Wifi Temperature Controller</H1>
+        <a href="/">Main Screen</A> | <a href="system.htm">System Setup</A> | <a href="control.htm">Control Setup</A> | <a href="wifi.htm">WIFI Setup</A> | <a href="email.htm">Email Alerts</A>
+      </td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>

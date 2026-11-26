@@ -1,0 +1,246 @@
+<html>
+<head>
+
+<style type="text/css">
+   *
+   {
+      font-family: Arial;
+   }
+   body
+   {
+      background-color: #FFFFFF;
+   }
+   table
+   {
+      border-collapse: collapse;
+   }
+   table, th, td
+   {
+      border: 1px solid black;
+   }
+   th
+   {
+      background-color: #CCCCCC;
+   }
+   td
+   {
+      padding: 5px;
+   }
+   .top table, .top th, .top td
+   {
+      border: 0px;
+   }
+   .noborder table, .noborder th, .noborder td
+   {
+      border: 0px;
+   }
+   font.alert
+   {
+      color: #C00000;
+      font-weight: bold;
+   }
+</style>
+
+<script type="text/javascript">
+var ajaxGet;
+var t;
+var waiting = 0;
+var tValid = 0;
+var ios6workaround = 0;
+
+function setStartTime()
+{
+   tValid = 1;
+   t = setTimeout('ajax()', 1000);
+}
+
+function ajax()
+{   
+   if (waiting)
+   {
+      waiting--;
+   }
+   
+   if (!waiting)
+   {
+      ajaxGet=GetXmlHttpObject();
+ 
+      if (ajaxGet==null)
+      {
+         alert ("Your browser does not support AJAX!");
+         return;
+      }
+
+      waiting = 4;  //wait 20 seconds for a response
+
+      ajaxGet.open("POST", "email.xml", true);
+
+      ajaxGet.onreadystatechange = stateChanged;
+
+      ajaxGet.send("IGNOREDTAG="+ios6workaround);
+      
+      if (++ios6workaround > 255)
+         ios6workaround = 0;
+   }
+
+   tValid = 1;
+   t = setTimeout('ajax()', 5000);
+}
+
+function GetElementNodeValue(xmlDoc, element)
+{
+   return xmlDoc.getElementsByTagName(element)[0].childNodes[0].nodeValue;
+}
+
+var xmlDirectReplace =
+[
+   "EMAIL_LAST_INTERVAL",
+   "EMAIL_ATTEMPTS",
+   "EMAIL_SUCCESS",
+   "EMAIL_LAST_TRY"
+];
+
+function UpdateExistingValues(xmlDoc)
+{
+   var i;
+
+   for (i=0; i<xmlDirectReplace.length; i++)
+   {
+      var id = xmlDirectReplace[i];
+      if (xmlDoc.getElementsByTagName(id)[0] != null)
+      {
+         if (document.getElementById(id).innerHTML != GetElementNodeValue(xmlDoc, id))
+         {
+            document.getElementById(id).innerHTML = GetElementNodeValue(xmlDoc, id);
+         }
+      }
+   }
+}
+
+function stateChanged()
+{
+   if (ajaxGet.readyState==4)
+   {
+      UpdateExistingValues(ajaxGet.responseXML.documentElement);
+      
+      waiting = 0;
+  }
+}
+
+function GetXmlHttpObject()
+{
+   if (window.XMLHttpRequest)
+   {
+      // code for IE7+, Firefox, Chrome, Opera, Safari
+      return new XMLHttpRequest();
+   }
+   if (window.ActiveXObject)
+   {
+      // code for IE6, IE5
+      return new ActiveXObject("Microsoft.XMLHTTP");
+   }
+   return null;
+}
+</script>
+
+<title>CyberQ Wifi Temperature Controller - Email Alerts</title>
+
+</head>
+
+<body onload="setStartTime('');">
+
+<H2>E-Mail Setup</H2>
+
+<FORM method="post">
+<input type="hidden" name="EEAUTOFLUSH" value="0">
+
+<P>
+<TABLE WIDTH=600>
+<TR>
+   <TH width=25%>SMTP Hostname</TH>
+   <TD width=75%><input name="SMTP_HOST" type="text" size="50" maxlength="63" value="smtp.fixture.invalid"></TD>
+</TR>
+<TR>
+   <TH>SMTP TCP Port</TH>
+   <TD><input name="SMTP_PORT" type="text" maxlength="5" size=6 value="0"><BR/><FONT size=-1>Set to 0 to disable all E-mail functionality.  The default port for most SMTP servers is 25.</FONT></TD>
+</TR>
+<TR>
+   <TH>SMTP Authentication Username</TH>
+   <TD><input name="SMTP_USER" type="text" size="50" maxlength="63" value="user@fixture.invalid"><BR /><FONT size=-1>Leave blank if no authentication needed</FONT></TD>
+</TR>
+<TR>
+   <TH>SMTP Authentication Password</TH>
+   <TD><input name="SMTP_PWD" type="password" size="50" maxlength="63" value="fixture-password"><BR /><FONT size=-1>Leave blank if no authentication needed</FONT></TD>
+</TR>
+<TR>
+   <TH>Email Recepient</TH>
+   <TD><input name="SMTP_TO" type="text" size="50" maxlength="63" value="to@fixture.invalid"></TD>
+</TR>
+<TR>
+   <TH>Email From</TH>
+   <TD><input name="SMTP_FROM" type="text" size="50" maxlength="63" value="from@fixture.invalid"></TD>
+</TR>
+<TR>
+   <TH>Email Subject</TH>
+   <TD><input name="SMTP_SUBJ" type="text" size="50" maxlength="63" value="Fixture status e-mail"></TD>
+</TR>
+<TR>
+   <TH>Email Alert Interval (minutes)</TH>
+   <TD><input name="SMTP_ALERT" type="text" maxlength="3" size=4 value="0"><BR /><FONT size=-1>Set to 0 to turn off alarm interval.  If alarm interval is off, only alarms will cause an e-mail.</FONT></TD>
+</TR>
+<TR>
+   <TH>Email Now</TH>
+   <TD><input name="SMTP_NOW" type="checkbox" value="1"><BR/><FONT size=-1>Form must be submitted with this checked for e-mail to be sent now.</FONT></TD>
+</TR>
+</TABLE></P>
+
+<H2>Status</H2>
+
+<p>
+<table width=600>
+<tr>
+   <th width=25%>Email Attempts</th>
+   <td width=75% id="EMAIL_ATTEMPTS">&nbsp;</td>
+</tr>
+<tr>
+   <th>Email Success</th>
+   <td id="EMAIL_SUCCESS">&nbsp;</td>
+</tr>
+<tr>
+   <th>Minutes since last try</th>
+   <td id="EMAIL_LAST_TRY">&nbsp;</td>
+</tr>
+<tr>
+   <th>Minutes since last interval</th>
+   <td id="EMAIL_LAST_INTERVAL">&nbsp;</td>
+</tr>
+
+</table>
+</p>
+
+<p>
+<font class="alert">These parameters require a power-cycle.</font>
+</p>
+
+<input type="hidden" name="EEAUTOFLUSH" value="1">
+
+<div class="noborder">
+<p><TABLE BORDER=0><TR><TD><input type="submit" value="Submit Values"/></TD><TD><input value="Cancel Changes" type="reset"/></TD></form><form action="reboot.htm"><TD><input type="submit" value="Reboot Device"></TD></form></TABLE></P>
+</div>
+
+<div class="top">
+  <table border="0">
+    <tr>
+      <td>
+        <A HREF="/"><img src="logo.jpg" align="left" width="125" height="150" border=0/></A>
+      </td>
+      <td valign="bottom">
+        <H1>CyberQ Wifi Temperature Controller</H1>
+        <a href="/">Main Screen</A> | <a href="system.htm">System Setup</A> | <a href="control.htm">Control Setup</A> | <a href="wifi.htm">WIFI Setup</A> | <a href="email.htm">Email Alerts</A>
+      </td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>

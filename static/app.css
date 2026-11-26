@@ -1,0 +1,338 @@
+/* BBQ dashboard — dark theme, vanilla CSS (task 5) */
+
+:root {
+  --bg: #101114;
+  --bg-card: #191c21;
+  --bg-card-hover: #1f2329;
+  --border: #2a2f36;
+  --text: #e8e6e3;
+  --text-muted: #9aa0a6;
+  --accent: #ff7043;
+  --ok: #66bb6a;
+  --high: #e040fb;
+  --low: #42a5f5;
+  --done: #e040fb;
+  --error: #ffa726;
+  --hold: #42a5f5;
+  --alarm: #ef5350;
+  --shutdown: #ef5350;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 -apple-system, "Segoe UI", system-ui, Roboto, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: rgba(16, 17, 20, 0.92);
+  backdrop-filter: blur(6px);
+  z-index: 10;
+}
+
+.brand {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.brand span {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+.pill {
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.pill .dot { margin-right: 6px; }
+.pill.up { color: var(--ok); }
+.pill.up .dot::before { content: "●"; color: var(--ok); }
+.pill.down { color: var(--alarm); }
+.pill.down .dot::before { content: "●"; color: var(--alarm); }
+
+.banner {
+  margin: 12px 22px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--alarm);
+  border-radius: 8px;
+  background: rgba(239, 83, 80, 0.12);
+  color: var(--alarm);
+  font-size: 14px;
+}
+.hidden { display: none !important; }
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 18px 22px 40px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.card.clickable { cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.card.clickable:hover { background: var(--bg-card-hover); border-color: #3a4149; }
+
+.card-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.probe-name {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 2px 0 6px;
+  overflow-wrap: anywhere;
+}
+
+.probe-temp {
+  font-size: 38px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.probe-temp .unit { font-size: 16px; font-weight: 400; color: var(--text-muted); }
+.probe-temp.open { color: var(--text-muted); font-size: 28px; }
+
+.probe-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+.probe-set b { color: var(--text); font-weight: 600; }
+
+.chip {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.st-0 { color: var(--ok); border-color: var(--ok); }
+.st-1 { color: var(--high); border-color: var(--high); }
+.st-2 { color: var(--low); border-color: var(--low); }
+.st-3 { color: var(--done); border-color: var(--done); }
+.st-4 { color: var(--error); border-color: var(--error); }
+.st-5 { color: var(--hold); border-color: var(--hold); }
+.st-6 { color: var(--alarm); border-color: var(--alarm); }
+.st-7 { color: var(--shutdown); border-color: var(--shutdown); }
+.probe-temp.st-0 { color: var(--ok); }
+.probe-temp.st-1 { color: var(--high); }
+.probe-temp.st-2 { color: var(--low); }
+.probe-temp.st-3 { color: var(--done); }
+.probe-temp.st-4 { color: var(--error); }
+.probe-temp.st-5 { color: var(--hold); }
+.probe-temp.st-6 { color: var(--alarm); }
+.probe-temp.st-7 { color: var(--shutdown); }
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.fan {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.fan-bar {
+  flex: 1;
+  height: 14px;
+  border-radius: 999px;
+  background: #262b31;
+  overflow: hidden;
+}
+.fan-bar > div {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #ffa726, var(--accent));
+  transition: width 0.5s ease;
+}
+#fan-pct {
+  font-size: 26px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 64px;
+  text-align: right;
+}
+
+.timer {
+  font-size: 34px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin: 4px 0;
+}
+.muted { color: var(--text-muted); font-size: 13px; }
+
+.btn {
+  background: #23282f;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.btn:hover { background: #2a3038; border-color: #3a4149; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #1a120c; font-weight: 600; }
+.btn.primary:hover { background: #ff8a5f; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+.chart-card { margin-top: 14px; }
+#range-btns { display: flex; gap: 6px; }
+#range-btns .btn { padding: 4px 10px; font-size: 13px; }
+#range-btns .btn.active { background: var(--accent); border-color: var(--accent); color: #1a120c; font-weight: 600; }
+#chart { margin-top: 10px; }
+
+#cook-info { font-size: 15px; overflow-wrap: anywhere; }
+
+dialog {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 320px;
+}
+dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+dialog h3 { margin: 0 0 14px; font-size: 17px; }
+dialog label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+dialog input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: #23282f;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+}
+dialog input:focus { outline: 1px solid var(--accent); }
+.hint { font-size: 12px; color: var(--text-muted); margin: 0 0 12px; }
+#dialog-error { color: var(--alarm); font-size: 13px; min-height: 18px; margin: 0 0 8px; }
+
+/* uPlot dark overrides */
+.uplot, .u-legend { font: 12px/1.4 -apple-system, "Segoe UI", system-ui, sans-serif; }
+.u-legend .u-series th { color: var(--text-muted); }
+.u-legend u { color: var(--text); }
+.u-axis { color: var(--text-muted); }
+.u-cursor-x, .u-cursor-y { border-color: #3a4149; }
+.u-select { background: rgba(255, 112, 67, 0.08); }
+
+footer {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 10px 0 24px;
+}
+
+/* setup section (task 5 extension) */
+
+.setup { margin-top: 18px; }
+.section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+
+.kv-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  font-size: 14px;
+}
+.kv-row span { color: var(--text-muted); }
+.kv-row b { font-weight: 600; overflow-wrap: anywhere; text-align: right; }
+
+.btn.danger {
+  border-color: var(--alarm);
+  color: var(--alarm);
+}
+.btn.danger:hover { background: rgba(239, 83, 80, 0.12); }
+
+.dialog-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+dialog select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  background: #23282f;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+}
+dialog select:focus { outline: 1px solid var(--accent); }
+dialog h4 {
+  margin: 14px 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+dialog .dialog-error { color: var(--alarm); font-size: 13px; min-height: 18px; margin: 0 0 8px; }
+dialog .confirm-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--alarm);
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+dialog .confirm-label input { width: auto; margin: 0; }
+.danger-text { color: var(--alarm); }

@@ -1,0 +1,11 @@
+recon/config.xml
+recon/wifi.htm
+recon/email.htm
+*.db
+__pycache__/
+.venv/
+opencode.json
+.pytest_cache/
+*.egg-info/
+recon/wifi.htm
+recon/email.htm

@@ -1,0 +1,11 @@
+.git
+.venv
+.pytest_cache
+__pycache__
+*.egg-info
+recon
+tests
+dev
+bbq.db
+bbq.db-*
+opencode.json

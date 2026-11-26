@@ -1,0 +1,563 @@
+<html>
+<head>
+<style type="text/css">
+   *
+   {
+      font-family: Arial;
+   }
+   body
+   {
+      background-color: #FFFFFF;
+   }
+   table
+   {
+      border-collapse: collapse;
+   }
+   table, th, td
+   {
+      border: 1px solid black;
+   }
+   th
+   {
+      background-color: #CCCCCC;
+   }
+   td
+   {
+      padding: 5px;
+   }
+   .top table, .top th, .top td
+   {
+      border: 0px;
+   }
+   .noborder table, .noborder th, .noborder td
+   {
+      border: 0px;
+   }
+   font.alert
+   {
+      color: #C00000;
+      font-weight: bold;
+   }
+   .hiddenRowTrue { display:none; }
+   .hiddenRowFalse { display:table-row; }
+</style>
+<script type="text/javascript">
+
+var wifiModule = 0;
+var isAwaySettingsValid = 0;
+
+function initPage()
+{
+   var wifiModuleStr = "1";
+   var fwVer = "3.1";
+   
+   fwVer = (fwVer - 0) * 10;
+   var fwVerMaj = Math.floor(fwVer / 10);
+   var fwVerMin = fwVer % 10;
+   if
+   (
+      ((fwVerMaj == 3) && (fwVerMin >= 1)) ||
+      ((fwVerMaj == 2) && (fwVerMin >= 3))
+   )
+   {
+      isAwaySettingsValid = 1;
+   }
+   
+   if (isAwaySettingsValid)
+   {
+      document.getElementById("wifi_away_settings_div").style.display = "block";
+      
+      document.getElementById("wifi_away_settings_tr").className  = "hiddenRowFalse";
+   }
+   else
+   {
+      document.getElementById("wifi_away_settings_div").style.display = "none";
+      
+      document.getElementById("wifi_away_settings_tr").className  = "hiddenRowTrue";
+   }
+   
+   if (wifiModuleStr.length > 0)
+   {
+      wifiModule = wifiModuleStr - 0;
+   }
+   
+   resetForm();
+   
+   document.getElementById("mainBody").style.display = "block";
+}
+
+function resetForm()
+{
+   var dhcpVal1 = "1";
+   var dhcpVal2 = "1";
+   dhcpVal1 = dhcpVal1 - 0;
+   dhcpVal2 = dhcpVal2 - 0;
+   if (dhcpVal1 >= 2)
+   {
+      dhcpVal1 = 0;
+   }
+   if (dhcpVal2 >= 2)
+   {
+      dhcpVal2 = 0;
+   }   
+   
+   document.mainForm.MULTI_WIFI_CHOICE.value="0";
+   
+   document.mainForm.IP.value = "192.168.101.10";
+   document.mainForm.IP2.value = "192.168.101.10";
+   document.mainForm.GW.value = "192.168.101.1";
+   document.mainForm.GW2.value = "192.168.101.1";
+   document.mainForm.NM.value = "255.255.255.0";
+   document.mainForm.NM2.value = "255.255.255.0";
+   document.mainForm.DNS.value = "192.168.101.10";
+   document.mainForm.DNS2.value = "192.168.101.10";
+   document.mainForm.DHCP.selectedIndex = dhcpVal1;
+   document.mainForm.DHCP2.selectedIndex = dhcpVal2;
+   document.mainForm.SSID.value = "fixture-net";
+   document.mainForm.SSID2.value = "fixture-away";
+   document.mainForm.WIFI_KEY.value = "********************";
+   document.mainForm.WIFI_KEY2.value = "********************";
+   document.mainForm.HTTP_USER.value = "";
+   document.mainForm.HTTP_PASS.value = "";
+   document.mainForm.HTTP_PORT.value = "80";
+   wifiModeReset('WIFIMODE', "0" - 0);
+   wifiModeReset('WIFIMODE2',"1" - 0);
+   wifiEncReset('WIFI_ENC', "6" - 0, 'WIFIMODE');
+   wifiEncReset('WIFI_ENC2', "1" - 0, 'WIFIMODE2');
+}
+
+function cgiSelectAddOption(name, val, selectId)
+{
+  var elOptNew = document.createElement('option');
+  elOptNew.text = name;
+  elOptNew.value = val;
+  var elSel = document.getElementById(selectId);
+
+  try {
+    elSel.add(elOptNew, null); // standards compliant; doesn't work in IE
+  }
+  catch(ex) {
+    elSel.add(elOptNew); // IE only
+  }
+}
+
+function wifiModeReset(idStr, value)
+{
+   var elSel = mainFormGet(idStr);
+   
+   //remove all elements
+   while (elSel.length > 0)
+   {
+      elSel.remove(elSel.length - 1);
+   }
+
+   if (value >= 2)
+      value = 0;
+   
+   // see g_WifiNetworkModesValues and g_WifiNetworkModesStrings in the firmware
+   cgiSelectAddOption("Infrastructure", 0, idStr);
+   if ((wifiModule == 2) || (wifiModule == 1))
+   {
+      cgiSelectAddOption("Hot Spot", 1, idStr);
+   }
+   else
+   {
+      cgiSelectAddOption("Ad Hoc", 1, idStr);
+   }
+   
+   //document.mainForm.WIFIMODE.value = value;
+   mainFormGet(idStr).value = value;
+}
+
+function wifiEncReset(encTypeIdStr, encTypeValue, wifiModeIdStr)
+{
+   var elSel = mainFormGet(encTypeIdStr);
+   
+   //remove all elements
+   while (elSel.length > 0)
+   {
+      elSel.remove(elSel.length - 1);
+   }
+   
+   if (encTypeValue > 9)
+   {
+      encTypeValue = 0;
+   }
+   
+   cgiSelectAddOption("Open", 0, encTypeIdStr);
+   cgiSelectAddOption("WEP40", 1, encTypeIdStr);
+   cgiSelectAddOption("WEP104", 2, encTypeIdStr);
+   cgiSelectAddOption("WEP Auto", 9, encTypeIdStr);
+   
+   if ((mainFormGet(wifiModeIdStr).selectedIndex == 0) || (wifiModule==2))
+   {
+      //infrastructure has more options
+      cgiSelectAddOption("WPA", 3, encTypeIdStr);
+      cgiSelectAddOption("WPA, Phrase", 4, encTypeIdStr);
+      cgiSelectAddOption("WPA2", 5, encTypeIdStr);
+      cgiSelectAddOption("WPA2, Phrase", 6, encTypeIdStr);
+      cgiSelectAddOption("WPA Auto", 7, encTypeIdStr);
+      cgiSelectAddOption("WPA Auto, Phrase", 8, encTypeIdStr);
+   }
+   else
+   {
+      if ((encTypeValue >= 3) && (encTypeValue <= 8))
+      {
+         encTypeValue = 0;
+      }
+   }
+
+   //document.mainForm.WIFI_ENC.value = value;
+   mainFormGet(encTypeIdStr).value = encTypeValue;
+}
+
+function wifiModeChanged(which)
+{
+   if (which == 2)
+   {
+      wifiEncReset('WIFI_ENC2', document.mainForm.WIFI_ENC2.value, 'WIFIMODE2');
+   }
+   else
+   {
+      wifiEncReset('WIFI_ENC', document.mainForm.WIFI_ENC.value, 'WIFIMODE');
+   }
+}
+
+function MyMessageBox(myMsg)
+{
+   alert(myMsg);
+}
+
+function isXDigit(aChar)
+{
+   return (isDigit(aChar) || isA2F(aChar));
+}
+// Test for digits
+function isDigit(aChar)
+{
+   myCharCode = aChar.charCodeAt(0);
+
+   if((myCharCode > 47) && (myCharCode <  58))
+   {
+      return true;
+   }
+
+   return false;
+}
+// Test for letters A to F
+function isA2F(aChar)
+{
+   myCharCode = aChar.charCodeAt(0);
+
+   if(((myCharCode > 64) && (myCharCode <  71)) ||
+      ((myCharCode > 96) && (myCharCode < 103)))
+   {
+      return true;
+   }
+
+   return false;
+}
+
+function mainFormGet(idStr)
+{
+   // I cheated here - the only reason getElementById is because I added an 'id' tag to the input that matches the 'name'
+   return(document.getElementById(idStr));
+}
+
+// perform check of key/enc
+// returns 1 if OK, 0 if not ok
+function submitFrom_checkKey(encIdStr, keyIdStr, alertStr)
+{
+   var minLength, length, length2, digitsOnly;
+   var ok = 1;
+   var i;
+   var ignoredString = "********************";
+   
+   minLength = 0;
+   length = 0;
+   length2 = 0;
+   
+   if (mainFormGet(encIdStr).value == 0)   
+   {
+      // open
+      length = 0;       //no required length
+      digitsOnly = 0;   
+   }
+   else if (mainFormGet(encIdStr).value == 1)
+   {
+      //wep40
+      length = 10;
+      digitsOnly = 1;
+   }
+   else if (mainFormGet(encIdStr).value == 2)
+   {
+      //wep104
+      length = 26;
+      digitsOnly = 1;
+   }
+   else if (mainFormGet(encIdStr).value == 9)
+   {
+      //wep40 or wep104
+      length = 26;
+      length2 = 10;
+      digitsOnly = 1;
+   }
+   else if (
+               (mainFormGet(encIdStr).value == 3) ||
+               (mainFormGet(encIdStr).value == 5) ||
+               (mainFormGet(encIdStr).value == 7)
+            )
+   {
+      //wpa/wpa2 key
+      length = 64;
+      digitsOnly = 1;
+   }
+   else
+   {
+      // wpa/wpa2 phrase
+      minLength = 8;
+      digitsOnly = 0;
+   }
+   
+   if 
+   (
+      length &&
+      length2
+   )
+   {
+      if
+      (
+         (mainFormGet(keyIdStr).value.length != length) &&
+         (mainFormGet(keyIdStr).value.length != length2)
+      )
+      {
+         ok = 0;
+      }
+   }
+   else if (length && (mainFormGet(keyIdStr).value.length != length))
+   {
+      ok = 0;
+   }
+   else if (minLength && (mainFormGet(keyIdStr).value.length < minLength))
+   {
+      ok = 0;
+   }
+   
+   
+   if (digitsOnly)
+   {
+      for (i=0; i<mainFormGet(keyIdStr).value.length; i++)
+      {
+         if (!isXDigit(mainFormGet(keyIdStr).value.charAt(i)))
+         {
+            ok = 0;
+         }
+      }
+   }
+   
+   if (mainFormGet(keyIdStr).value == ignoredString)
+   {
+      ok = 1;
+   }
+   
+   if (!ok)
+   {
+      var str;
+      if (minLength != 0)
+      {
+         str = alertStr + " encryption key must be at least" + minLength;
+      }
+      else
+      {
+         str = alertStr + " encryption key must be " + length;
+      }
+      if (length2 != 0)
+      {
+         str = str + " or " + length2;
+      }
+      if (digitsOnly)
+      {
+         str = str + " HEX characters (0..9, A..F)";
+      }
+      else
+      {
+         str = str + " characters";
+      }
+      
+      MyMessageBox(str);
+   }
+   
+   return(ok);
+}
+
+function submitForm()
+{
+      //todo
+   ok = submitFrom_checkKey("WIFI_ENC", "WIFI_KEY", "Home");
+   
+   if (ok && isAwaySettingsValid)
+   {
+      ok = submitFrom_checkKey("WIFI_ENC2", "WIFI_KEY2", "Away");
+   }
+   
+   if (ok)
+   {
+      document.mainForm.submit();
+   }
+}
+</script>
+
+<title>CyberQ Wifi Temperature Controller - WIFI Setup</title>
+</head>
+
+<body id="mainBody" style="display:none;" onload="initPage('');">
+<form name="mainForm" method="POST">
+<input type="hidden" name="EEAUTOFLUSH" value="0">
+
+<H2>WIFI Setup</H2>
+
+<p>
+<table width=600>
+<tr>
+   <th with=25%>MAC Address</th>
+   <td width=75%>00:1E:C0:00:00:00</td>
+</tr>
+<tr>
+   <th>FW Version</th>
+   <td>3.1, 2.49.12</td>
+</tr>
+<tr>
+   <th>HTTP Username</th>
+   <td><input type="text" name="HTTP_USER" maxlength=32 size=42></td>
+</tr>
+<tr>
+   <th>HTTP Password</th>
+   <td><input type="password" name="HTTP_PASS" maxlength=32 size=42><BR/><font size=-1>Set either username or password to blank to disable password protection.</font></td>
+</tr>
+<tr>
+   <th>HTTP Port</th>
+   <td><input type="text" name="HTTP_PORT" maxlength=5 size=6></td>
+</tr>
+<tr id="wifi_away_settings_tr">
+   <th>WIFI Settings</th>
+   <td><select name="MULTI_WIFI_CHOICE"><option value=0>Home</option><option value=1>Away</option></select></td>
+</tr>
+</table>
+</p>
+
+<p>
+<table width=600>
+<tr><th colspan=2><center>Home Settings</center></th></tr>
+<tr>
+   <th width=25%>Static IP Address</th>
+   <td width=75%><input type="text" name="IP" maxlength=15><br/><font size=-1>This is the value used when a.) using Infrastructure mode and DHCP client is turned off or b.) using Ad Hoc mode or c.) using Hot Spot mode.</font></td>
+</tr>
+<tr>
+   <th>Static Gateway Address</th>
+   <td><input type="text" name="GW" maxlength=15><br/><font size=-1>This is the value used when a.) using Infrastructure mode and DHCP client is turned off or b.) using Ad Hoc mode or c.) using Hot Spot mode.</font></td>
+</tr>
+<tr>
+   <th>Static Netmask Address</th>
+   <td><input type="text" name="NM" maxlength=15><br/><font size=-1>This is the value used when a.) using Infrastructure mode and DHCP client is turned off or b.) using Ad Hoc mode or c.) using Hot Spot mode.</font></td>
+</tr>
+<tr>
+   <th>Static DNS Address</th>
+   <td><input type="text" name="DNS" maxlength=15><br/><font size=-1>This is the value used when a.) using Infrastructure mode and DHCP client is turned off or b.) using Ad Hoc mode or c.) using Hot Spot mode.</font></td>
+</tr>
+<tr>
+   <th>WIFI Mode</th>
+   <td><select name="WIFIMODE" id="WIFIMODE" onchange="wifiModeChanged(1);"><option value=0>Infrastructure</option></select>
+</tr>
+<tr>
+   <th>DHCP Client</th>
+   <td><select name="DHCP"><option value=0>Off</option><option value=1>On</option></select><BR/><font size=-1>This is only used in Infrastructure mode.  When in Ad Hoc mode or Hot Spot, device will act as a DHCP Server and DNS Server.</font></td>
+</tr>
+<tr>
+   <th>SSID</th>
+   <td><input type="text" name="SSID" maxlength=31></td>
+</tr>
+<tr>
+   <th>Encryption</th>
+   <td><select name="WIFI_ENC" id="WIFI_ENC"><option value=0>Open</option></select><BR/></td>
+</tr>
+<tr>
+   <th>Key</th>
+   <td><input type="password" name="WIFI_KEY" id="WIFI_KEY" maxlength=64 size=50></td>
+</tr>
+</table>
+</p>
+
+<p id="wifi_away_settings_div">
+<table width=600>
+<tr><th colspan=2><center>Away Settings</center></th></tr>
+<tr>
+   <th width=25%>Static IP Address</th>
+   <td width=75%><input type="text" name="IP2" maxlength=15><br/><font size=-1>This is the value used when a.) using Infrastructure mode and DHCP client is turned off or b.) using Ad Hoc mode or c.) using Hot Spot mode.</font></td>
+</tr>
+<tr>
+   <th>Static Gateway Address</th>
+   <td><input type="text" name="GW2" maxlength=15><br/><font size=-1>This is the value used when a.) using Infrastructure mode and DHCP client is turned off or b.) using Ad Hoc mode or c.) using Hot Spot mode.</font></td>
+</tr>
+<tr>
+   <th>Static Netmask Address</th>
+   <td><input type="text" name="NM2" maxlength=15><br/><font size=-1>This is the value used when a.) using Infrastructure mode and DHCP client is turned off or b.) using Ad Hoc mode or c.) using Hot Spot mode.</font></td>
+</tr>
+<tr>
+   <th>Static DNS Address</th>
+   <td><input type="text" name="DNS2" maxlength=15><br/><font size=-1>This is the value used when a.) using Infrastructure mode and DHCP client is turned off or b.) using Ad Hoc mode or c.) using Hot Spot mode.</font></td>
+</tr>
+<tr>
+   <th>WIFI Mode</th>
+   <td><select name="WIFIMODE2" id="WIFIMODE2" onchange="wifiModeChanged(2);"><option value=0>Infrastructure</option></select>
+</tr>
+<tr>
+   <th>DHCP Client</th>
+   <td><select name="DHCP2"><option value=0>Off</option><option value=1>On</option></select><BR/><font size=-1>This is only used in Infrastructure mode.  When in Ad Hoc mode or Hot Spot, device will act as a DHCP Server and DNS Server.</font></td>
+</tr>
+<tr>
+   <th>SSID</th>
+   <td><input type="text" name="SSID2" maxlength=31></td>
+</tr>
+<tr>
+   <th>Encryption</th>
+   <td><select name="WIFI_ENC2" id="WIFI_ENC2"><option value=0>Open</option></select><BR/></td>
+</tr>
+<tr>
+   <th>Key</th>
+   <td><input type="password" name="WIFI_KEY2" id="WIFI_KEY2" maxlength=64 size=50></td>
+</tr>
+</table>
+</p>
+
+<p>
+<font class="alert">These parameters require a power-cycle.</font>
+</p>
+
+<input type="hidden" name="EEAUTOFLUSH" value="1">
+
+<div class="noborder">
+<p><TABLE BORDER=0>
+<TR>
+   <TD><input type="button" value="Submit Values" onclick="submitForm()"></TD>
+   <TD><input value="Cancel Changes" type="button" onclick="resetForm();"></TD></form>
+   <form action="scan.htm" method="post"><TD><input type="hidden" name="WIFI_SCAN_START" value="1"><input type="submit" value="Perform WIFI Scan"></TD></form>
+   <form action="reboot.htm"><TD><input type="submit" value="Reboot Device"></TD></form>
+</TABLE></P>
+</div>
+
+<div class="top">
+  <table border="0">
+    <tr>
+      <td>
+        <A HREF="/"><img src="logo.jpg" align="left" width="125" height="150" border=0/></A>
+      </td>
+      <td valign="bottom">
+        <H1>CyberQ Wifi Temperature Controller</H1>
+        <a href="/">Main Screen</A> | <a href="system.htm">System Setup</A> | <a href="control.htm">Control Setup</A> | <a href="wifi.htm">WIFI Setup</A> | <a href="email.htm">Email Alerts</A>
+      </td>
+    </tr>
+  </table>
+</div>
+
+</body>
+</html>

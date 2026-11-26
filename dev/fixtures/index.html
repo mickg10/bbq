@@ -1,0 +1,474 @@
+<html>
+<head>
+<style type="text/css">
+   *
+   {
+      font-family: Arial;
+   }
+   body
+   {
+      background-color: #FFFFFF;
+   }
+   table
+   {
+      border-collapse: collapse;
+   }
+   table, th, td
+   {
+      border: 1px solid black;
+   }
+   th
+   {
+      background-color: #CCCCCC;
+   }
+   td
+   {
+      padding: 5px;
+   }
+   .top table, .top th, .top td
+   {
+      border: 0px;
+   }
+   .noborder table, .noborder th, .noborder td
+   {
+      border: 0px;
+   }
+   <!-- statusClassX are the classes used when displaying statusValToStr[] .  statusClass0 is statusValToStr[0], etc.
+   -->
+   .statusClass0
+   {
+      color: inherit;
+      <!-- OK -->
+   }
+   .statusClass1
+   {
+      color: magenta;
+      <!-- HIGH -->
+   }
+   .statusClass2
+   {
+      color: blue;
+      <!-- LOW -->
+   }
+   .statusClass3
+   {
+      color: magenta;
+      <!-- DONE -->
+   }
+   .statusClass4
+   {
+      color: orange;
+      <!-- ERROR -->
+   }
+   .statusClass5
+   {
+      color: blue;
+      <!-- HOLD -->      
+   }
+   .statusClass6
+   {
+      color: red;
+      <!-- ALARM -->
+   } 
+   .statusClass7
+   {
+      color: red;
+      <!-- SHUTDOWN -->
+   }
+   </style>
+<script type="text/javascript">
+var ajaxGet;
+var t;
+var waiting = 0;
+var tValid = 0;
+var ios6workaround = 0;
+
+function initForm()
+{
+   document.mainForm.COOK_NAME.value = "Cook";
+   document.mainForm.FOOD1_NAME.value = "Food1";
+   document.mainForm.FOOD2_NAME.value = "Food2";
+   document.mainForm.FOOD3_NAME.value = "Food3";
+   document.mainForm._COOK_SET.value = TempPICToHTML(1900, 0);
+   document.mainForm._FOOD1_SET.value = TempPICToHTML(1800, 0);
+   document.mainForm._FOOD2_SET.value = TempPICToHTML(1800, 0);
+   document.mainForm._FOOD3_SET.value = TempPICToHTML(1800, 0);
+}
+
+function setStartTime()
+{
+   tValid = 1;
+   t = setTimeout('ajax()', 1000);
+}
+
+function initScript()
+{
+   initForm();
+   setStartTime();   
+}
+ 
+function ajax()
+{   
+   if (waiting)
+   {
+      waiting--;
+   }
+   
+   if (!waiting)
+   {
+      ajaxGet=GetXmlHttpObject();
+ 
+      if (ajaxGet==null)
+      {
+         alert ("Your browser does not support AJAX!");
+         return;
+      }
+
+      waiting = 10;  //wait 10 seconds for a response
+
+      ajaxGet.open("POST", "status.xml", true);
+
+      ajaxGet.onreadystatechange = stateChanged;
+
+      ajaxGet.send("IGNOREDTAG="+ios6workaround);
+      
+      if (++ios6workaround > 255)
+         ios6workaround = 0;
+   }
+
+   setStartTime();
+}
+
+function CookTimerEntryValid()
+{
+   var ret = 0;
+   var input = document.mainForm._COOK_TIMER.value;
+   var regex = /^\d{2}:\d{2}:\d{2}$/;
+   
+   if (input.search(regex) != -1)
+   {
+      ret = 1;
+   }
+   
+   return ret;
+}
+
+function FormAppendHidden(theForm, elementName, elementValue)
+{
+   //var newElement = document.createElement("<input name='"+elementName+"' type='hidden'>");
+   var newElement = document.createElement('input');
+   newElement.setAttribute('name', elementName);
+   newElement.setAttribute('type', 'hidden');
+   
+   theForm.appendChild(newElement);
+   
+   newElement.value = elementValue;
+}
+
+function submitForm()
+{
+   document.mainForm.COOK_SET.value = TempHTMLToPIC(document.mainForm._COOK_SET.value);
+   document.mainForm.FOOD1_SET.value = TempHTMLToPIC(document.mainForm._FOOD1_SET.value);
+   document.mainForm.FOOD2_SET.value = TempHTMLToPIC(document.mainForm._FOOD2_SET.value);
+   document.mainForm.FOOD3_SET.value = TempHTMLToPIC(document.mainForm._FOOD3_SET.value);
+   
+   //TODO: convert _COOK_TIMER to COOK_TIMER if valid
+   if (CookTimerEntryValid())
+   {
+      FormAppendHidden(document.mainForm, "COOK_TIMER", document.mainForm._COOK_TIMER.value);
+   }
+   
+   document.mainForm.submit();
+}
+
+function GetElementAttributeValue(xmlDoc, element, attribute)
+{
+   var n;
+   var i;
+   
+   n = xmlDoc.getElementsByTagName(element)[0].attributes.length;
+   
+   for (i=0; i<n; i++)
+   {
+      if (xmlDoc.getElementsByTagName(element)[0].attributes[i].name == attribute)
+      {
+         return xmlDoc.getElementsByTagName(element)[0].attributes[i].value;
+      }
+   }
+   
+   return "";
+}
+
+function GetElementNodeValue(xmlDoc, element)
+{
+   return xmlDoc.getElementsByTagName(element)[0].childNodes[0].nodeValue;
+}
+
+var displayInF=1;
+
+function TempHTMLToPIC(temp)
+{
+   if (!displayInF)
+   {
+      temp *= 9;
+      temp /= 5;
+      temp += 32;
+   }
+      
+   return(Math.round(temp));
+}
+
+function TempPICToHTML(temp, agnostic)
+{
+   if (!displayInF && !agnostic)
+   {
+      temp -= 320;
+      temp *= 5;
+      temp /= 9;
+   }
+   
+   temp /= 10;
+   
+   return Math.round(temp);
+}
+
+function DegUnitsChar()
+{
+   var unit;
+   
+   if (!displayInF)
+   {
+      unit = 'C';
+   }
+   else
+   {
+      unit = 'F';
+   }
+   
+   return unit;
+}
+
+var xmlDirectReplace =
+[
+   "TIMER_CURR"
+];
+
+// needs to go in same order as xmlStatusReplace (except timer_status can be ignored)
+var xmlTempReplace =
+[
+   "COOK_TEMP",
+   "FOOD1_TEMP",
+   "FOOD2_TEMP",
+   "FOOD3_TEMP"
+]
+
+var xmlStatusReplace =
+[
+   "COOK_STATUS",
+   "FOOD1_STATUS",
+   "FOOD2_STATUS",
+   "FOOD3_STATUS",
+   "TIMER_STATUS"
+];
+
+// see cook_status_t in PIC source
+var statusValToStr =
+[
+   "OK",
+   "HIGH",
+   "LOW",
+   "DONE",
+   "ERROR",
+   "HOLD",
+   "ALARM",
+   "SHUTDOWN"
+];
+
+function UpdateExistingValues(xmlDoc)
+{
+   var i;
+
+   if (GetElementNodeValue(xmlDoc, "FAN_SHORTED") != 0)
+   {
+      document.getElementById("idLocWarning").innerHTML = "Unit Halted: Fan Shorted";
+   
+      document.getElementById("idLocValues").style.display = "none";
+      document.getElementById("idLocWarning").style.display = "block";   
+   }
+   else
+   {
+      if (xmlDoc.getElementsByTagName("OUTPUT_PERCENT")[0] != null)
+      {
+         document.getElementById("OUTPUT_PERCENT").innerHTML = GetElementNodeValue(xmlDoc, "OUTPUT_PERCENT") + " %";
+      }
+      
+      for (i=0; i<xmlDirectReplace.length; i++)
+      {
+         var id = xmlDirectReplace[i];
+         if (xmlDoc.getElementsByTagName(id)[0] != null)
+         {
+            if (document.getElementById(id).innerHTML != GetElementNodeValue(xmlDoc, id))
+            {
+               document.getElementById(id).innerHTML = GetElementNodeValue(xmlDoc, id);
+            }
+         }
+      }
+
+      for (i=0; i<xmlTempReplace.length; i++)
+      {
+         var id = xmlTempReplace[i];
+         if (GetElementNodeValue(xmlDoc, xmlStatusReplace[i]) != 4)
+         {
+            if (xmlDoc.getElementsByTagName(id)[0] != null)
+            {
+               document.getElementById(id).innerHTML = TempPICToHTML(GetElementNodeValue(xmlDoc, id), 0) + " " + DegUnitsChar();
+               //document.getElementById(id).setAttribute("class", "statusClass0");
+               //document.getElementById(id).setAttribute("className", "statusClass0");
+            }
+         }
+         else
+         {
+            document.getElementById(id).innerHTML = "OPEN";
+            //document.getElementById(id).setAttribute("class", "statusClass4");
+            //document.getElementById(id).setAttribute("className", "statusClass4");
+         }
+      }
+      
+      for (i=0; i<xmlStatusReplace.length; i++)
+      {
+         var idStatus = xmlStatusReplace[i];
+         var idTemp = xmlTempReplace[i];
+         
+         if ((xmlDoc.getElementsByTagName(idStatus)[0] != null) && (xmlDoc.getElementsByTagName(idTemp)[0] != null))
+         {
+            document.getElementById(idStatus).innerHTML = statusValToStr[GetElementNodeValue(xmlDoc, idStatus)];
+            
+            // change class to statusClass0, statusClass1, etc
+            document.getElementById(idStatus).setAttribute("class", "statusClass"+GetElementNodeValue(xmlDoc, idStatus));
+            document.getElementById(idStatus).setAttribute("className", "statusClass"+GetElementNodeValue(xmlDoc, idStatus));
+            document.getElementById(idTemp).setAttribute("class", "statusClass"+GetElementNodeValue(xmlDoc, idStatus));
+            document.getElementById(idTemp).setAttribute("className", "statusClass"+GetElementNodeValue(xmlDoc, idStatus));
+            
+         }
+      }
+      
+      document.getElementById("idLocValues").style.display = "block";
+      document.getElementById("idLocWarning").style.display = "none";
+   }
+}
+
+function stateChanged()
+{
+   if (ajaxGet.readyState==4)
+   {
+      UpdateExistingValues(ajaxGet.responseXML.documentElement);
+      
+      waiting = 0;
+  }
+}
+
+function GetXmlHttpObject()
+{
+   if (window.XMLHttpRequest)
+   {
+      // code for IE7+, Firefox, Chrome, Opera, Safari
+      return new XMLHttpRequest();
+   }
+   if (window.ActiveXObject)
+   {
+      // code for IE6, IE5
+      return new ActiveXObject("Microsoft.XMLHTTP");
+   }
+   return null;
+}
+ </script>
+ 
+ 
+<title>CyberQ Wifi Temperature Controller - Control Status</title>
+</head>
+
+<body onload="initScript('');">
+<H2>Control Status</H2>
+
+<P id="idLocWarning">Loading...</P>
+
+<div id="idLocValues" style="display:none;">
+<form name="mainForm" method="POST">
+<input type="hidden" name="EEAUTOFLUSH" value="0">
+
+<!--javascript will provide values to this on submit-->
+<input type="hidden" name="COOK_SET" value="0">
+<input type="hidden" name="FOOD1_SET" value="0">
+<input type="hidden" name="FOOD2_SET" value="0">
+<input type="hidden" name="FOOD3_SET" value="0">
+
+<P>
+<TABLE WIDTH=600>
+<TR>
+   <TH width=40%>SENSOR</TH>
+   <TH width=20%>ACTUAL</TH>
+   <TH width=20%>SETPOINT</TH>
+   <TH width=20%>STATUS</TH>
+</TR>
+<TR>
+   <TD><input type="text" maxlength=31 name="COOK_NAME"></TD>
+   <TD id="COOK_TEMP">&nbsp;</TD>
+   <TD><input type="text" maxlength=3 size=4 name="_COOK_SET"> <script>document.write(DegUnitsChar())</script></TD>
+   <TD id="COOK_STATUS">&nbsp;</TD>
+</TR>
+<TR>
+   <TD><input type="text" maxlength=31 name="FOOD1_NAME"></TD>
+   <TD id="FOOD1_TEMP">&nbsp;</TD>
+   <TD><input type="text" maxlength=3 size=4 name="_FOOD1_SET"> <script>document.write(DegUnitsChar())</script></TD>
+   <TD id="FOOD1_STATUS">&nbsp;</TD>
+</TR>
+<TR>
+   <TD><input type="text" maxlength=31 name="FOOD2_NAME"></TD>
+   <TD id="FOOD2_TEMP">&nbsp;</TD>
+   <TD><input type="text" maxlength=3 size=4 name="_FOOD2_SET"> <script>document.write(DegUnitsChar())</script></TD>
+   <TD id="FOOD2_STATUS">&nbsp;</TD>
+</TR>
+<TR>
+   <TD><input type="text" maxlength=31 name="FOOD3_NAME"></TD>
+   <TD id="FOOD3_TEMP">&nbsp;</TD>
+   <TD><input type="text" maxlength=3 size=4 name="_FOOD3_SET"> <script>document.write(DegUnitsChar())</script></TD>
+   <TD id="FOOD3_STATUS">&nbsp;</TD>
+</TR>
+<TR>
+   <TD>OUTPUT</TD>
+   <TD id="OUTPUT_PERCENT">&nbsp;</TD>
+   <TD>&nbsp;</TD>
+   <TD>&nbsp;</TD>
+</TR>
+<TR>
+   <TD>TIMER</TD>
+   <TD id="TIMER_CURR">&nbsp;</TD>
+   <TD><input type="text" maxlength=8 size=9 name="_COOK_TIMER"></TD>
+   <TD id="TIMER_STATUS">&nbsp;</TD>
+</TR>
+</TABLE>
+</P>
+
+<input type="hidden" name="EEAUTOFLUSH" value="1">
+
+<P><div class="noborder">
+<p><TABLE BORDER=0><TR><TD><input type="button" value="Submit Values" onclick="submitForm()"/></TD><TD><input value="Cancel Changes" type="button" onclick="initForm();"/></TD></form><form action="reboot.htm"><TD><input type="submit" value="Reboot Device"></TD></form></TABLE></P>
+</div></P>
+</div>
+
+<P><div class="top">
+  <table border="0">
+    <tr>
+      <td>
+        <A HREF="/"><img src="logo.jpg" align="left" width="125" height="150" border=0/></A>
+      </td>
+      <td valign="bottom">
+        <H1>CyberQ Wifi Temperature Controller</H1>
+        <a href="/">Main Screen</A> | <a href="system.htm">System Setup</A> | <a href="control.htm">Control Setup</A> | <a href="wifi.htm">WIFI Setup</A> | <a href="email.htm">Email Alerts</A>
+      </td>
+    </tr>
+  </table>
+</div></P>
+
+</body>
+</html>

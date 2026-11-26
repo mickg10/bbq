@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BBQ · CyberQ</title>
+  <link rel="stylesheet" href="uPlot.min.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header>
+    <div class="brand">🔥 BBQ <span>CyberQ dashboard</span></div>
+    <div id="device-pill" class="pill"><span class="dot"></span>connecting…</div>
+  </header>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <main>
+    <section id="probes" class="cards">
+      <!-- probe cards are rendered by app.js -->
+    </section>
+
+    <section class="row">
+      <div class="card">
+        <div class="card-title">Fan output</div>
+        <div class="fan">
+          <div class="fan-bar"><div id="fan-fill"></div></div>
+          <div id="fan-pct">–</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Cook timer</div>
+        <div id="timer" class="timer">--:--:--</div>
+        <div id="timer-status" class="muted">&nbsp;</div>
+        <div class="btn-row"><button id="btn-timer" class="btn">Set timer</button></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Cook session</div>
+        <div id="cook-info" class="muted">No active cook</div>
+        <div class="btn-row">
+          <button id="btn-cook-start" class="btn">Start cook</button>
+          <button id="btn-cook-end" class="btn" disabled>End cook</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="card-title">
+        Temperature history
+        <span id="range-btns">
+          <button class="btn" data-range="1h">1h</button>
+          <button class="btn" data-range="6h">6h</button>
+          <button class="btn active" data-range="24h">24h</button>
+          <button class="btn" data-range="cook">Cook</button>
+          <button class="btn" id="btn-refresh">↻</button>
+        </span>
+      </div>
+      <div id="chart"></div>
+      <div id="chart-empty" class="muted hidden" style="padding: 24px 4px">
+        No samples yet — the poller is collecting data.
+      </div>
+    </section>
+
+    <section class="setup">
+      <h2 class="section-title">Device setup</h2>
+      <div class="cards">
+        <div class="card">
+          <div class="card-title">Control loop</div>
+          <div class="kv" id="ctl-summary"><span class="muted">loading…</span></div>
+          <div class="btn-row">
+            <button id="btn-ctl-edit" class="btn">Edit</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">System</div>
+          <div class="kv" id="sys-summary"><span class="muted">loading…</span></div>
+          <div class="btn-row">
+            <button id="btn-sys-edit" class="btn">Edit</button>
+            <button id="btn-reboot" class="btn danger" hidden>Reboot device</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">E-mail alerts</div>
+          <div class="kv" id="eml-summary"><span class="muted">loading…</span></div>
+          <div class="btn-row">
+            <button id="btn-eml-edit" class="btn">Edit</button>
+            <button id="btn-eml-test" class="btn">Send test</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">WiFi &amp; network</div>
+          <div class="kv" id="wifi-summary"><span class="muted">loading…</span></div>
+          <div class="btn-row">
+            <button id="btn-wifi-edit" class="btn">Edit</button>
+            <button id="btn-wifi-scan" class="btn">Scan</button>
+            <button id="btn-wifi-clearauth" class="btn danger">Clear HTTP login</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>BBQ Guru CyberQ WiFi · tailnet-only · no firmware controls, ever</footer>
+
+  <dialog id="probe-dialog">
+    <form method="dialog" id="probe-form">
+      <h3 id="probe-dialog-title">Edit probe</h3>
+      <label>Name
+        <input id="probe-name" maxlength="16" autocomplete="off">
+      </label>
+      <label>Setpoint (°F)
+        <input id="probe-set" type="number" step="1" autocomplete="off">
+      </label>
+      <p class="hint" id="probe-hint"></p>
+      <p id="dialog-error"></p>
+      <div class="btn-row" style="justify-content: flex-end">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="ok">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="timer-dialog">
+    <form method="dialog" id="timer-form">
+      <h3>Cook timer</h3>
+      <label>HH:MM:SS
+        <input id="timer-input" placeholder="02:30:00" autocomplete="off">
+      </label>
+      <p class="hint">Countdown before the food is done. Empty keeps the current timer.</p>
+      <p id="timer-dialog-error"></p>
+      <div class="btn-row" style="justify-content: flex-end">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="ok">Set</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="cook-dialog">
+    <form method="dialog" id="cook-form">
+      <h3>Start a cook</h3>
+      <label>Name
+        <input id="cook-name" maxlength="64" placeholder="Brisket" autocomplete="off">
+      </label>
+      <p id="cook-dialog-error"></p>
+      <div class="btn-row" style="justify-content: flex-end">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="ok">Start</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="ctl-dialog">
+    <form method="dialog" id="ctl-form">
+      <h3>Control loop</h3>
+      <div class="dialog-grid">
+        <label>Cook hold (°F) <input id="ctl-cookhold" type="number" step="0.5" min="32" max="475"></label>
+        <label>Alarm deviation (°F) <input id="ctl-alarmdev" type="number" step="0.5" min="0" max="475"></label>
+        <label>Proportional band (°F) <input id="ctl-propband" type="number" step="0.5" min="0" max="475"></label>
+        <label>Cycle time (s) <input id="ctl-cyctime" type="number" step="1" min="0" max="99"></label>
+        <label>Timeout action
+          <select id="ctl-timeout_action">
+            <option value="0">No action</option>
+            <option value="1">Hold</option>
+            <option value="2">Alarm</option>
+            <option value="3">Shutdown</option>
+          </select>
+        </label>
+        <label>Ramp
+          <select id="ctl-cook_ramp">
+            <option value="0">Off</option>
+            <option value="1">Food 1</option>
+            <option value="2">Food 2</option>
+            <option value="3">Food 3</option>
+          </select>
+        </label>
+        <label>Open detect
+          <select id="ctl-opendetect">
+            <option value="0">Off</option>
+            <option value="1">On</option>
+          </select>
+        </label>
+      </div>
+      <p class="hint">Alarm deviation and proportional band are deltas — no °F↔°C offset ever applies to them. Cook hold is an absolute temperature.</p>
+      <p id="ctl-error" class="dialog-error"></p>
+      <div class="btn-row" style="justify-content: flex-end">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="ok">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="sys-dialog">
+    <form method="dialog" id="sys-form">
+      <h3>System</h3>
+      <div class="dialog-grid">
+        <label>LCD backlight (%) <input id="sys-lcd_backlight" type="number" step="1" min="0" max="100"></label>
+        <label>LCD contrast (%) <input id="sys-lcd_contrast" type="number" step="1" min="0" max="100"></label>
+        <label>Units
+          <select id="sys-deg_units">
+            <option value="0">°C</option>
+            <option value="1">°F</option>
+          </select>
+        </label>
+        <label>Alarm beeps
+          <select id="sys-alarm_beeps">
+            <option value="0">Off</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </label>
+        <label>Key beeps
+          <select id="sys-key_beeps">
+            <option value="0">Off</option>
+            <option value="1">On</option>
+          </select>
+        </label>
+        <label>Menu scrolling
+          <select id="sys-menu_scrolling">
+            <option value="0">Off</option>
+            <option value="1">On</option>
+          </select>
+        </label>
+      </div>
+      <p id="sys-error" class="dialog-error"></p>
+      <div class="btn-row" style="justify-content: flex-end">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="ok">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="eml-dialog">
+    <form method="dialog" id="eml-form">
+      <h3>E-mail alerts</h3>
+      <div class="dialog-grid">
+        <label>SMTP host <input id="eml-smtp_host" maxlength="63" autocomplete="off"></label>
+        <label>SMTP port <input id="eml-smtp_port" type="number" step="1" min="0" max="65535"><span class="hint">0 disables all e-mail</span></label>
+        <label>SMTP user <input id="eml-smtp_user" maxlength="63" autocomplete="off"></label>
+        <label>SMTP password <input id="eml-smtp_pwd" type="password" maxlength="63" placeholder="unchanged if blank" autocomplete="new-password"></label>
+        <label>To <input id="eml-smtp_to" maxlength="63" autocomplete="off"></label>
+        <label>From <input id="eml-smtp_from" maxlength="63" autocomplete="off"></label>
+        <label>Subject <input id="eml-smtp_subj" maxlength="63" autocomplete="off"></label>
+        <label>Alert interval (min) <input id="eml-smtp_alert" type="number" step="1" min="0" max="999"></label>
+      </div>
+      <p class="hint">The password is write-only: blank keeps the stored one; it is never shown, logged or stored by the dashboard. The device needs a power-cycle to apply e-mail settings.</p>
+      <p id="eml-error" class="dialog-error"></p>
+      <div class="btn-row" style="justify-content: flex-end">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="ok">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="wifi-dialog">
+    <form method="dialog" id="wifi-form">
+      <h3>WiFi &amp; network</h3>
+      <p class="hint danger-text">Careful: a bad write here can strand the device off the network. Keys are write-only — blank keeps the stored key. Changes need a device power-cycle.</p>
+      <label class="confirm-label">
+        <input type="checkbox" id="wifi-confirm">
+        I understand the risk and want to apply these network changes.
+      </label>
+      <h4>Home profile</h4>
+      <div class="dialog-grid">
+        <label>SSID <input id="wifi-ssid" maxlength="31" autocomplete="off"></label>
+        <label>Key <input id="wifi-wifi_key" type="password" maxlength="64" placeholder="unchanged if blank" autocomplete="new-password"></label>
+        <label>Encryption
+          <select id="wifi-wifi_enc">
+            <option value="0">Open</option>
+            <option value="1">WEP40</option>
+            <option value="2">WEP104</option>
+            <option value="3">WPA</option>
+            <option value="4">WPA phrase</option>
+            <option value="5">WPA2</option>
+            <option value="6">WPA2 phrase</option>
+            <option value="7">WPA auto</option>
+            <option value="8">WPA auto phrase</option>
+            <option value="9">WEP auto</option>
+          </select>
+        </label>
+        <label>Mode
+          <select id="wifi-wifi_mode">
+            <option value="0">Infrastructure</option>
+            <option value="1">Hot spot</option>
+          </select>
+        </label>
+        <label>DHCP client
+          <select id="wifi-dhcp">
+            <option value="0">Off (static below)</option>
+            <option value="1">On</option>
+          </select>
+        </label>
+        <label>Static IP <input id="wifi-ip" maxlength="15" autocomplete="off"></label>
+        <label>Gateway <input id="wifi-gw" maxlength="15" autocomplete="off"></label>
+        <label>Netmask <input id="wifi-nm" maxlength="15" autocomplete="off"></label>
+        <label>DNS <input id="wifi-dns" maxlength="15" autocomplete="off"></label>
+      </div>
+      <h4>Away profile</h4>
+      <div class="dialog-grid">
+        <label>SSID <input id="wifi-away_ssid" maxlength="31" autocomplete="off"></label>
+        <label>Key <input id="wifi-away_wifi_key" type="password" maxlength="64" placeholder="unchanged if blank" autocomplete="new-password"></label>
+        <label>Encryption
+          <select id="wifi-away_wifi_enc">
+            <option value="0">Open</option>
+            <option value="1">WEP40</option>
+            <option value="2">WEP104</option>
+            <option value="3">WPA</option>
+            <option value="4">WPA phrase</option>
+            <option value="5">WPA2</option>
+            <option value="6">WPA2 phrase</option>
+            <option value="7">WPA auto</option>
+            <option value="8">WPA auto phrase</option>
+            <option value="9">WEP auto</option>
+          </select>
+        </label>
+        <label>Mode
+          <select id="wifi-away_wifi_mode">
+            <option value="0">Infrastructure</option>
+            <option value="1">Hot spot</option>
+          </select>
+        </label>
+        <label>DHCP client
+          <select id="wifi-away_dhcp">
+            <option value="0">Off (static below)</option>
+            <option value="1">On</option>
+          </select>
+        </label>
+        <label>Static IP <input id="wifi-away_ip" maxlength="15" autocomplete="off"></label>
+        <label>Gateway <input id="wifi-away_gw" maxlength="15" autocomplete="off"></label>
+        <label>Netmask <input id="wifi-away_nm" maxlength="15" autocomplete="off"></label>
+        <label>DNS <input id="wifi-away_dns" maxlength="15" autocomplete="off"></label>
+      </div>
+      <h4>Active profile &amp; HTTP interface</h4>
+      <div class="dialog-grid">
+        <label>Active profile
+          <select id="wifi-multi_wifi_choice">
+            <option value="0">Home</option>
+            <option value="1">Away</option>
+          </select>
+        </label>
+        <label>HTTP port <input id="wifi-http_port" type="number" step="1" min="1" max="65535"></label>
+      </div>
+      <p class="hint">The device's HTTP login is managed separately: use “Clear HTTP login” on the card to disable it, or set a new one below. Blank fields are left untouched.</p>
+      <div class="dialog-grid">
+        <label>HTTP user <input id="wifi-http_user" maxlength="32" autocomplete="off"></label>
+        <label>HTTP password <input id="wifi-http_pass" type="password" maxlength="32" placeholder="unchanged if blank" autocomplete="new-password"></label>
+      </div>
+      <p id="wifi-error" class="dialog-error"></p>
+      <div class="btn-row" style="justify-content: flex-end">
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="ok">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="uPlot.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
