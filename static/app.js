@@ -298,6 +298,13 @@ function tooltipPlugin() {
           tip.classList.add("hidden");
           return;
         }
+        // Over a gap (device off), the nearest point can be hours away: show
+        // nothing rather than a reading from another time.
+        const step = (RANGES[state.range] || {}).step || 60;
+        if (Math.abs(u.posToVal(u.cursor.left, "x") - u.data[0][idx]) > Math.max(2 * step, 10)) {
+          tip.classList.add("hidden");
+          return;
+        }
         const rows = [];
         SERIES.forEach((s, i) => {
           const v = u.data[i + 1][idx];
@@ -399,7 +406,30 @@ function emptyChartData() {
   return [new Array(0), ...SERIES.map(() => new Array(0))];
 }
 
+/** The chart range survives a reload: ?range= in the URL wins, then the
+ * last one picked (localStorage), then the 24h default. */
+function savedRange() {
+  const fromUrl = new URLSearchParams(window.location.search).get("range");
+  if (fromUrl && RANGES[fromUrl]) return fromUrl;
+  try {
+    const stored = window.localStorage.getItem("bbq.range");
+    if (stored && RANGES[stored]) return stored;
+  } catch (err) { /* storage blocked */ }
+  return "24h";
+}
+
+function markRange(range) {
+  state.range = range;
+  for (const button of document.querySelectorAll("#range-btns [data-range]")) {
+    button.classList.toggle("active", button.dataset.range === range);
+  }
+}
+
 function setRange(range) {
+  try { window.localStorage.setItem("bbq.range", range); } catch (err) { /* storage blocked */ }
+  const url = new URL(window.location.href);
+  url.searchParams.set("range", range);
+  window.history.replaceState(null, "", url);
   state.range = range;
   for (const button of document.querySelectorAll("#range-btns [data-range]")) {
     button.classList.toggle("active", button.dataset.range === range);
@@ -763,6 +793,7 @@ function start() {
     button.addEventListener("click", () => setRange(button.dataset.range));
   }
 
+  markRange(savedRange());
   pollStatus();
   pollCooks().then(loadHistory);
   loadConfig();

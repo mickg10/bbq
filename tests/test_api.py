@@ -398,3 +398,18 @@ def test_cooks_crud(make_app) -> None:
 
         assert client.patch("/api/cooks/999", json={"end": True}).status_code == 404
         assert client.post("/api/cooks", json={"name": ""}).status_code == 422
+
+
+def test_static_ui_is_revalidated_on_every_load(tmp_path, monkeypatch):
+    """A redeploy must reach the browser on the next reload (no heuristic
+    caching of app.js)."""
+    from fastapi.testclient import TestClient
+    from app import main
+    monkeypatch.setenv("CYBERQ_URL", "http://127.0.0.1:9")
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "t.db"))
+    monkeypatch.setenv("POLL_INTERVAL", "0")
+    with TestClient(main.create_app()) as client:
+        for path in ("/", "/app.js", "/app.css"):
+            response = client.get(path)
+            assert response.status_code == 200
+            assert response.headers["cache-control"] == "no-cache"

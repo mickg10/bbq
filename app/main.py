@@ -48,6 +48,17 @@ from app.poller import Poller
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 MAX_HISTORY_POINTS = 20_000
 
+
+class _RevalidatedStatic(StaticFiles):
+    """The UI files, served with ``Cache-Control: no-cache``: browsers keep
+    them but revalidate on every load (ETag, so a 304 when unchanged). With no
+    header they cache heuristically, and a redeploy goes unseen for hours."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
 #: Credential fields per section: audit rows log the change with NULL
 #: old/new values; responses never contain them.
 _SECRET_KEYS = {
@@ -415,7 +426,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # ------------------------------------------------------------------ static UI
 
     if _STATIC_DIR.exists():
-        app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
+        app.mount("/", _RevalidatedStatic(directory=_STATIC_DIR, html=True), name="static")
 
     return app
 
