@@ -9,3 +9,4 @@ opencode.json
 *.egg-info/
 recon/wifi.htm
 recon/email.htm
+firmware/
