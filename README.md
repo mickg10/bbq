@@ -29,13 +29,22 @@ FastAPI + uvicorn + httpx, SQLite from the stdlib, vanilla-JS UI with
 ```sh
 uv venv --python 3.12 .venv
 uv pip install -p .venv -e '.[dev]'
-.venv/bin/python -m pytest -q          # 72 tests, all against the fake device
-uvicorn dev.fake_cyberq:app --port 8099              # fake CyberQ (optional)
+.venv/bin/python -m pytest -q          # the whole suite; no test touches a real device
+uvicorn dev.fake_cyberq:app --port 8099              # fake CyberQ: static fixture values
+.venv/bin/python -m sim serve --speed 60 --port 8099 # simulated CyberQ: a live model
 CYBERQ_URL=http://127.0.0.1:8099 DB_PATH=bbq-dev.db \
-  .venv/bin/uvicorn app.main:app --port 8080          # app against the fake
+  .venv/bin/uvicorn app.main:app --port 8080          # the app, against either of them
 ```
 
-No test ever touches the real device: everything runs against `dev/fake_cyberq.py`.
+No test ever touches the real device: everything runs against `dev/fake_cyberq.py`
+or the simulator.
+
+The simulator ([`sim/`](sim/), see [docs/SIMULATOR.md](docs/SIMULATOR.md)) puts a
+thermal model of the cooker — and the CyberQ's own control loop — behind the
+device's wire format. It serves the same pages, XML and forms as the real box,
+byte for byte, so the dashboard can be developed against a cook that heats up,
+stalls and recovers instead of static fixtures. `--speed 60` runs an hour of
+cooking in a minute.
 
 ## Configuration
 
@@ -98,6 +107,8 @@ a firewalled interface). The CyberQ itself has no auth worth relying on.
 app/        main.py, device.py, poller.py, db.py, models.py
 static/     index.html, app.js, app.css, vendored uPlot
 tests/      test_device_allowlist.py, test_parse.py, test_api.py, test_fake_cyberq.py
+tests/sim/  the simulator's tests, including the dashboard run against it
 dev/        fake_cyberq.py (test double), make_fixtures.py, fixtures/ (sanitized pages)
+sim/        the simulator: plant, food, probes, controllers, device, clock, engine, server, cli
 recon/      raw device captures (config.xml, wifi.htm, email.htm are gitignored: credentials)
 ```

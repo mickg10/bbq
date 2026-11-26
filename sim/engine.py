@@ -18,14 +18,15 @@ bit-for-bit regardless of how fast the steps are taken.
 from __future__ import annotations
 
 import random
+from collections import deque
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
 from sim.clock import SimClock
 from sim.controllers.base import FOOD_PROBES
-from sim.device import CyberQDevice, DeviceOutput
+from sim.device import CyberQDevice, DeviceOutput, DeviceSettings
 from sim.food import Food
-from sim.plant import Cooker
+from sim.plant import Cooker, Plant
 from sim.probes import Probe
 
 PROBE_NAMES = ("cook", "food1", "food2", "food3")
@@ -105,13 +106,18 @@ class Simulator:
         sample_every: int = 1,
         events: Sequence[Event] = (),
         seed: int = 0,
+        max_rows: int | None = None,
     ) -> None:
+        """``max_rows`` caps the sampled history (a server that runs for days
+        keeps only its most recent rows); None keeps everything."""
         if len(probes) != len(PROBE_NAMES):
             raise ValueError(f"need one probe per channel: {', '.join(PROBE_NAMES)}")
         if dt <= 0:
             raise ValueError("dt must be positive")
         if sample_every < 1:
             raise ValueError("sample_every must be at least 1")
+        if max_rows is not None and max_rows < 1:
+            raise ValueError("max_rows must be at least 1")
         self.cooker = cooker
         self.probes = list(probes)
         self.device = device
@@ -123,7 +129,9 @@ class Simulator:
         self.seed = int(seed)
         for i, probe in enumerate(self.probes):
             probe.rng = random.Random(self.seed * 1_000_003 + i)
-        self.rows: list[dict] = []
+        self.rows: list[dict] | deque[dict] = (
+            deque(maxlen=max_rows) if max_rows is not None else []
+        )
         self.steps = 0
         self._next_event = 0
         # a reading for t = 0, so the first control step sees the probes
@@ -186,12 +194,12 @@ class Simulator:
 
     def run(self, seconds: float, until: Callable[[dict], bool] | None = None) -> list[dict]:
         """Headless: step for ``seconds`` of simulated time (or until ``until``
-        says stop) as fast as possible. Returns the sampled rows."""
+        says stop) as fast as possible. Returns the sampled rows, oldest first."""
         for _ in range(int(round(seconds / self.dt))):
             row = self.step()
             if until is not None and until(row):
                 break
-        return self.rows
+        return list(self.rows)
 
     # -- reporting --------------------------------------------------------------
 
@@ -225,3 +233,32 @@ class Simulator:
         row["lid_open"] = int(self.env.lid_open_at(self.clock.t))
         row["lid_hold"] = int(out.lid_hold)
         return row
+
+
+def default_simulator(
+    *,
+    cook_set_f: float | None = None,
+    food: Food | None = None,
+    food_set_f: float | None = None,
+    ambient_f: float = 70.0,
+    fuel_btu: float = 200_000.0,
+    wind_mph: float = 0.0,
+    seed: int = 0,
+    controller=None,
+    max_rows: int | None = None,
+    **settings,
+) -> Simulator:
+    """The default cooker with nothing else specified: the default kamado
+    (:class:`sim.plant.PlantParams`) in still ``ambient_f`` air with a pit
+    probe, and a food probe plugged if — and only if — there is ``food`` on
+    it. Setpoints left out are the device's defaults; ``settings`` go to
+    :class:`sim.device.DeviceSettings`."""
+    env = Environment(ambient_f=ambient_f, wind_mph=wind_mph)
+    cooker = Cooker(Plant(t_amb=ambient_f, fuel_btu=fuel_btu), [food] if food else [])
+    probes = [Probe(), Probe(plugged=food is not None), Probe(plugged=False), Probe(plugged=False)]
+    if cook_set_f is not None:
+        settings["cook_set_f"] = cook_set_f
+    if food_set_f is not None:
+        settings["food_set_f"] = [food_set_f, 180.0, 180.0]
+    device = CyberQDevice(DeviceSettings(**settings), controller)
+    return Simulator(cooker, probes, device, env=env, seed=seed, max_rows=max_rows)

@@ -28,6 +28,11 @@ Every request is recorded (method, path, form pairs) and exposed at
 ``GET /_log``; ``DELETE /_log`` clears it. Requests to ``/_log`` itself
 are not recorded, so the log is exactly "what the device saw".
 
+The simulator (``sim/server.py``) puts a live model behind this same wire
+format. Every renderer and the form handler therefore take an optional
+``state`` — this module's live :data:`STATE` when left out — and are handed
+to the simulator as the ``render_*`` and ``apply_form`` names at the bottom.
+
 Run standalone for manual testing:
 
     uvicorn dev.fake_cyberq:app --port 8099
@@ -154,6 +159,16 @@ def reset() -> None:
     _read_count = 0
 
 
+def _view(state: dict | None) -> dict:
+    """The state to render or apply: the caller's, or this module's live STATE.
+
+    The simulator (``sim/server.py``) serves this same wire format from its
+    own model, so every renderer and the form handler below take an optional
+    ``state``. Tests and the routes here leave it out.
+    """
+    return STATE if state is None else state
+
+
 def _tick() -> None:
     """Drift the live temperatures a little on each read, so history data
     varies between polls (deterministic, so assertions are stable)."""
@@ -172,157 +187,162 @@ def _esc(value: object) -> str:
     return saxutils.escape(str(value), {'"': "&quot;"})
 
 
-def _temp(tag: str) -> str:
-    value = STATE[tag]
+def _temp(tag: str, state: dict | None = None) -> str:
+    state = _view(state)
+    value = state[tag]
     return "OPEN" if value is None else str(value)
 
 
-def _all_xml() -> str:
+def _all_xml(state: dict | None = None) -> str:
+    state = _view(state)
     return f"""<nutcallstatus>
    <!--this is similar to status.xml, but with more values-->
    <!--all temperatures are displayed in tenths F, regardless of setting of unit-->
    <!--all temperatures sent by browser to unit should be in F.  you can send tenths F with a decimal place, ex: 123.5-->
    <COOK>
-      <COOK_NAME>{_esc(STATE['COOK_NAME'])}</COOK_NAME>
-      <COOK_TEMP>{_temp('COOK_TEMP')}</COOK_TEMP>
-      <COOK_SET>{STATE['COOK_SET']}</COOK_SET>
-      <COOK_STATUS>{STATE['COOK_STATUS']}</COOK_STATUS>
+      <COOK_NAME>{_esc(state['COOK_NAME'])}</COOK_NAME>
+      <COOK_TEMP>{_temp('COOK_TEMP', state)}</COOK_TEMP>
+      <COOK_SET>{state['COOK_SET']}</COOK_SET>
+      <COOK_STATUS>{state['COOK_STATUS']}</COOK_STATUS>
    </COOK>
    <FOOD1>
-      <FOOD1_NAME>{_esc(STATE['FOOD1_NAME'])}</FOOD1_NAME>
-      <FOOD1_TEMP>{_temp('FOOD1_TEMP')}</FOOD1_TEMP>
-      <FOOD1_SET>{STATE['FOOD1_SET']}</FOOD1_SET>
-      <FOOD1_STATUS>{STATE['FOOD1_STATUS']}</FOOD1_STATUS>
+      <FOOD1_NAME>{_esc(state['FOOD1_NAME'])}</FOOD1_NAME>
+      <FOOD1_TEMP>{_temp('FOOD1_TEMP', state)}</FOOD1_TEMP>
+      <FOOD1_SET>{state['FOOD1_SET']}</FOOD1_SET>
+      <FOOD1_STATUS>{state['FOOD1_STATUS']}</FOOD1_STATUS>
    </FOOD1>
    <FOOD2>
-      <FOOD2_NAME>{_esc(STATE['FOOD2_NAME'])}</FOOD2_NAME>
-      <FOOD2_TEMP>{_temp('FOOD2_TEMP')}</FOOD2_TEMP>
-      <FOOD2_SET>{STATE['FOOD2_SET']}</FOOD2_SET>
-      <FOOD2_STATUS>{STATE['FOOD2_STATUS']}</FOOD2_STATUS>
+      <FOOD2_NAME>{_esc(state['FOOD2_NAME'])}</FOOD2_NAME>
+      <FOOD2_TEMP>{_temp('FOOD2_TEMP', state)}</FOOD2_TEMP>
+      <FOOD2_SET>{state['FOOD2_SET']}</FOOD2_SET>
+      <FOOD2_STATUS>{state['FOOD2_STATUS']}</FOOD2_STATUS>
    </FOOD2>
    <FOOD3>
-      <FOOD3_NAME>{_esc(STATE['FOOD3_NAME'])}</FOOD3_NAME>
-      <FOOD3_TEMP>{_temp('FOOD3_TEMP')}</FOOD3_TEMP>
-      <FOOD3_SET>{STATE['FOOD3_SET']}</FOOD3_SET>
-      <FOOD3_STATUS>{STATE['FOOD3_STATUS']}</FOOD3_STATUS>
+      <FOOD3_NAME>{_esc(state['FOOD3_NAME'])}</FOOD3_NAME>
+      <FOOD3_TEMP>{_temp('FOOD3_TEMP', state)}</FOOD3_TEMP>
+      <FOOD3_SET>{state['FOOD3_SET']}</FOOD3_SET>
+      <FOOD3_STATUS>{state['FOOD3_STATUS']}</FOOD3_STATUS>
    </FOOD3>
-   <OUTPUT_PERCENT>{STATE['OUTPUT_PERCENT']}</OUTPUT_PERCENT>
-   <TIMER_CURR>{_esc(STATE['TIMER_CURR'])}</TIMER_CURR>
-   <TIMER_STATUS>{STATE['TIMER_STATUS']}</TIMER_STATUS>
-   <DEG_UNITS>{STATE['DEG_UNITS']}</DEG_UNITS>
-   <COOK_CYCTIME>{STATE['COOK_CYCTIME']}</COOK_CYCTIME>
-   <COOK_PROPBAND>{STATE['COOK_PROPBAND']}</COOK_PROPBAND>
-   <COOK_RAMP>{STATE['COOK_RAMP']}</COOK_RAMP>
+   <OUTPUT_PERCENT>{state['OUTPUT_PERCENT']}</OUTPUT_PERCENT>
+   <TIMER_CURR>{_esc(state['TIMER_CURR'])}</TIMER_CURR>
+   <TIMER_STATUS>{state['TIMER_STATUS']}</TIMER_STATUS>
+   <DEG_UNITS>{state['DEG_UNITS']}</DEG_UNITS>
+   <COOK_CYCTIME>{state['COOK_CYCTIME']}</COOK_CYCTIME>
+   <COOK_PROPBAND>{state['COOK_PROPBAND']}</COOK_PROPBAND>
+   <COOK_RAMP>{state['COOK_RAMP']}</COOK_RAMP>
 </nutcallstatus>
 """
 
 
-def _status_xml() -> str:
+def _status_xml(state: dict | None = None) -> str:
+    state = _view(state)
     return f"""<nutcstatus>
    <!--all temperatures are displayed in tenths F, regardless of setting of unit-->
    <!--all temperatures sent by browser to unit should be in F.  you can send tenths F with a decimal place, ex: 123.5-->
-   <OUTPUT_PERCENT>{STATE['OUTPUT_PERCENT']}</OUTPUT_PERCENT>
-   <TIMER_CURR>{_esc(STATE['TIMER_CURR'])}</TIMER_CURR>
-   <COOK_TEMP>{_temp('COOK_TEMP')}</COOK_TEMP>
-   <FOOD1_TEMP>{_temp('FOOD1_TEMP')}</FOOD1_TEMP>
-   <FOOD2_TEMP>{_temp('FOOD2_TEMP')}</FOOD2_TEMP>
-   <FOOD3_TEMP>{_temp('FOOD3_TEMP')}</FOOD3_TEMP>
-   <COOK_STATUS>{STATE['COOK_STATUS']}</COOK_STATUS>
-   <FOOD1_STATUS>{STATE['FOOD1_STATUS']}</FOOD1_STATUS>
-   <FOOD2_STATUS>{STATE['FOOD2_STATUS']}</FOOD2_STATUS>
-   <FOOD3_STATUS>{STATE['FOOD3_STATUS']}</FOOD3_STATUS>
-   <TIMER_STATUS>{STATE['TIMER_STATUS']}</TIMER_STATUS>
-   <DEG_UNITS>{STATE['DEG_UNITS']}</DEG_UNITS>
-   <COOK_CYCTIME>{STATE['COOK_CYCTIME']}</COOK_CYCTIME>
-   <COOK_PROPBAND>{STATE['COOK_PROPBAND']}</COOK_PROPBAND>
-   <COOK_RAMP>{STATE['COOK_RAMP']}</COOK_RAMP>
-   <FAN_SHORTED>{STATE['FAN_SHORTED']}</FAN_SHORTED>
+   <OUTPUT_PERCENT>{state['OUTPUT_PERCENT']}</OUTPUT_PERCENT>
+   <TIMER_CURR>{_esc(state['TIMER_CURR'])}</TIMER_CURR>
+   <COOK_TEMP>{_temp('COOK_TEMP', state)}</COOK_TEMP>
+   <FOOD1_TEMP>{_temp('FOOD1_TEMP', state)}</FOOD1_TEMP>
+   <FOOD2_TEMP>{_temp('FOOD2_TEMP', state)}</FOOD2_TEMP>
+   <FOOD3_TEMP>{_temp('FOOD3_TEMP', state)}</FOOD3_TEMP>
+   <COOK_STATUS>{state['COOK_STATUS']}</COOK_STATUS>
+   <FOOD1_STATUS>{state['FOOD1_STATUS']}</FOOD1_STATUS>
+   <FOOD2_STATUS>{state['FOOD2_STATUS']}</FOOD2_STATUS>
+   <FOOD3_STATUS>{state['FOOD3_STATUS']}</FOOD3_STATUS>
+   <TIMER_STATUS>{state['TIMER_STATUS']}</TIMER_STATUS>
+   <DEG_UNITS>{state['DEG_UNITS']}</DEG_UNITS>
+   <COOK_CYCTIME>{state['COOK_CYCTIME']}</COOK_CYCTIME>
+   <COOK_PROPBAND>{state['COOK_PROPBAND']}</COOK_PROPBAND>
+   <COOK_RAMP>{state['COOK_RAMP']}</COOK_RAMP>
+   <FAN_SHORTED>{state['FAN_SHORTED']}</FAN_SHORTED>
 </nutcstatus>
 """
 
 
-def _config_xml() -> str:
+def _config_xml(state: dict | None = None) -> str:
+    state = _view(state)
     """config.xml rendered from live state — like the real device: WIFI_KEY
     masked, SMTP_PWD in the clear (placeholder values here)."""
     return f"""<nutcallstatus>
    <COOK>
-      <COOK_NAME>{_esc(STATE['COOK_NAME'])}</COOK_NAME>
-      <COOK_TEMP>{_temp('COOK_TEMP')}</COOK_TEMP>
-      <COOK_SET>{STATE['COOK_SET']}</COOK_SET>
-      <COOK_STATUS>{STATE['COOK_STATUS']}</COOK_STATUS>
+      <COOK_NAME>{_esc(state['COOK_NAME'])}</COOK_NAME>
+      <COOK_TEMP>{_temp('COOK_TEMP', state)}</COOK_TEMP>
+      <COOK_SET>{state['COOK_SET']}</COOK_SET>
+      <COOK_STATUS>{state['COOK_STATUS']}</COOK_STATUS>
    </COOK>
    <FOOD1>
-      <FOOD1_NAME>{_esc(STATE['FOOD1_NAME'])}</FOOD1_NAME>
-      <FOOD1_TEMP>{_temp('FOOD1_TEMP')}</FOOD1_TEMP>
-      <FOOD1_SET>{STATE['FOOD1_SET']}</FOOD1_SET>
-      <FOOD1_STATUS>{STATE['FOOD1_STATUS']}</FOOD1_STATUS>
+      <FOOD1_NAME>{_esc(state['FOOD1_NAME'])}</FOOD1_NAME>
+      <FOOD1_TEMP>{_temp('FOOD1_TEMP', state)}</FOOD1_TEMP>
+      <FOOD1_SET>{state['FOOD1_SET']}</FOOD1_SET>
+      <FOOD1_STATUS>{state['FOOD1_STATUS']}</FOOD1_STATUS>
    </FOOD1>
    <FOOD2>
-      <FOOD2_NAME>{_esc(STATE['FOOD2_NAME'])}</FOOD2_NAME>
-      <FOOD2_TEMP>{_temp('FOOD2_TEMP')}</FOOD2_TEMP>
-      <FOOD2_SET>{STATE['FOOD2_SET']}</FOOD2_SET>
-      <FOOD2_STATUS>{STATE['FOOD2_STATUS']}</FOOD2_STATUS>
+      <FOOD2_NAME>{_esc(state['FOOD2_NAME'])}</FOOD2_NAME>
+      <FOOD2_TEMP>{_temp('FOOD2_TEMP', state)}</FOOD2_TEMP>
+      <FOOD2_SET>{state['FOOD2_SET']}</FOOD2_SET>
+      <FOOD2_STATUS>{state['FOOD2_STATUS']}</FOOD2_STATUS>
    </FOOD2>
    <FOOD3>
-      <FOOD3_NAME>{_esc(STATE['FOOD3_NAME'])}</FOOD3_NAME>
-      <FOOD3_TEMP>{_temp('FOOD3_TEMP')}</FOOD3_TEMP>
-      <FOOD3_SET>{STATE['FOOD3_SET']}</FOOD3_SET>
-      <FOOD3_STATUS>{STATE['FOOD3_STATUS']}</FOOD3_STATUS>
+      <FOOD3_NAME>{_esc(state['FOOD3_NAME'])}</FOOD3_NAME>
+      <FOOD3_TEMP>{_temp('FOOD3_TEMP', state)}</FOOD3_TEMP>
+      <FOOD3_SET>{state['FOOD3_SET']}</FOOD3_SET>
+      <FOOD3_STATUS>{state['FOOD3_STATUS']}</FOOD3_STATUS>
    </FOOD3>
-   <OUTPUT_PERCENT>{STATE['OUTPUT_PERCENT']}</OUTPUT_PERCENT>
-   <TIMER_CURR>{_esc(STATE['TIMER_CURR'])}</TIMER_CURR>
-   <TIMER_STATUS>{STATE['TIMER_STATUS']}</TIMER_STATUS>
+   <OUTPUT_PERCENT>{state['OUTPUT_PERCENT']}</OUTPUT_PERCENT>
+   <TIMER_CURR>{_esc(state['TIMER_CURR'])}</TIMER_CURR>
+   <TIMER_STATUS>{state['TIMER_STATUS']}</TIMER_STATUS>
    <SYSTEM>
-      <MENU_SCROLLING>{STATE['MENU_SCROLLING']}</MENU_SCROLLING>
-      <LCD_BACKLIGHT>{STATE['LCD_BACKLIGHT']}</LCD_BACKLIGHT>
-      <LCD_CONTRAST>{STATE['LCD_CONTRAST']}</LCD_CONTRAST>
-      <DEG_UNITS>{STATE['DEG_UNITS']}</DEG_UNITS>
-      <ALARM_BEEPS>{STATE['ALARM_BEEPS']}</ALARM_BEEPS>
-      <KEY_BEEPS>{STATE['KEY_BEEPS']}</KEY_BEEPS>
+      <MENU_SCROLLING>{state['MENU_SCROLLING']}</MENU_SCROLLING>
+      <LCD_BACKLIGHT>{state['LCD_BACKLIGHT']}</LCD_BACKLIGHT>
+      <LCD_CONTRAST>{state['LCD_CONTRAST']}</LCD_CONTRAST>
+      <DEG_UNITS>{state['DEG_UNITS']}</DEG_UNITS>
+      <ALARM_BEEPS>{state['ALARM_BEEPS']}</ALARM_BEEPS>
+      <KEY_BEEPS>{state['KEY_BEEPS']}</KEY_BEEPS>
    </SYSTEM>
    <CONTROL>
-      <TIMEOUT_ACTION>{STATE['TIMEOUT_ACTION']}</TIMEOUT_ACTION>
-      <COOKHOLD>{STATE['COOKHOLD']}</COOKHOLD>
-      <ALARMDEV>{STATE['ALARMDEV']}</ALARMDEV>
-      <COOK_RAMP>{STATE['COOK_RAMP']}</COOK_RAMP>
-      <OPENDETECT>{STATE['OPENDETECT']}</OPENDETECT>
-      <CYCTIME>{STATE['CYCTIME']}</CYCTIME>
-      <PROPBAND>{STATE['PROPBAND']}</PROPBAND>
+      <TIMEOUT_ACTION>{state['TIMEOUT_ACTION']}</TIMEOUT_ACTION>
+      <COOKHOLD>{state['COOKHOLD']}</COOKHOLD>
+      <ALARMDEV>{state['ALARMDEV']}</ALARMDEV>
+      <COOK_RAMP>{state['COOK_RAMP']}</COOK_RAMP>
+      <OPENDETECT>{state['OPENDETECT']}</OPENDETECT>
+      <CYCTIME>{state['CYCTIME']}</CYCTIME>
+      <PROPBAND>{state['PROPBAND']}</PROPBAND>
    </CONTROL>
    <WIFI>
-      <IP>{STATE['IP']}</IP>
-      <NM>{STATE['NM']}</NM>
-      <GW>{STATE['GW']}</GW>
-      <DNS>{STATE['DNS']}</DNS>
-      <WIFIMODE>{STATE['WIFIMODE']}</WIFIMODE>
-      <DHCP>{STATE['DHCP']}</DHCP>
-      <SSID>{_esc(STATE['SSID'])}</SSID>
-      <MAC>{STATE['MAC']}</MAC>
-      <WIFI_ENC>{STATE['WIFI_ENC']}</WIFI_ENC>
+      <IP>{state['IP']}</IP>
+      <NM>{state['NM']}</NM>
+      <GW>{state['GW']}</GW>
+      <DNS>{state['DNS']}</DNS>
+      <WIFIMODE>{state['WIFIMODE']}</WIFIMODE>
+      <DHCP>{state['DHCP']}</DHCP>
+      <SSID>{_esc(state['SSID'])}</SSID>
+      <MAC>{state['MAC']}</MAC>
+      <WIFI_ENC>{state['WIFI_ENC']}</WIFI_ENC>
       <WIFI_KEY>{KEY_SENTINEL}</WIFI_KEY>
-      <HTTP_PORT>{STATE['HTTP_PORT']}</HTTP_PORT>
+      <HTTP_PORT>{state['HTTP_PORT']}</HTTP_PORT>
    </WIFI>
    <SMTP>
-      <SMTP_HOST>{_esc(STATE['SMTP_HOST'])}</SMTP_HOST>
-      <SMTP_PORT>{STATE['SMTP_PORT']}</SMTP_PORT>
-      <SMTP_USER>{_esc(STATE['SMTP_USER'])}</SMTP_USER>
-      <SMTP_PWD>{_esc(STATE['SMTP_PWD'])}</SMTP_PWD>
-      <SMTP_TO>{_esc(STATE['SMTP_TO'])}</SMTP_TO>
-      <SMTP_FROM>{_esc(STATE['SMTP_FROM'])}</SMTP_FROM>
-      <SMTP_SUBJ>{_esc(STATE['SMTP_SUBJ'])}</SMTP_SUBJ>
-      <SMTP_ALERT>{STATE['SMTP_ALERT']}</SMTP_ALERT>
+      <SMTP_HOST>{_esc(state['SMTP_HOST'])}</SMTP_HOST>
+      <SMTP_PORT>{state['SMTP_PORT']}</SMTP_PORT>
+      <SMTP_USER>{_esc(state['SMTP_USER'])}</SMTP_USER>
+      <SMTP_PWD>{_esc(state['SMTP_PWD'])}</SMTP_PWD>
+      <SMTP_TO>{_esc(state['SMTP_TO'])}</SMTP_TO>
+      <SMTP_FROM>{_esc(state['SMTP_FROM'])}</SMTP_FROM>
+      <SMTP_SUBJ>{_esc(state['SMTP_SUBJ'])}</SMTP_SUBJ>
+      <SMTP_ALERT>{state['SMTP_ALERT']}</SMTP_ALERT>
    </SMTP>
-   <FWVER>{_esc(STATE['FWVER'])}</FWVER>
+   <FWVER>{_esc(state['FWVER'])}</FWVER>
 </nutcallstatus>
 """
 
 
-def _email_xml() -> str:
+def _email_xml(state: dict | None = None) -> str:
+    state = _view(state)
     return f"""<nutcemail>
-   <EMAIL_ATTEMPTS>{STATE['EMAIL_ATTEMPTS']}</EMAIL_ATTEMPTS>
-   <EMAIL_SUCCESS>{STATE['EMAIL_SUCCESS']}</EMAIL_SUCCESS>
-   <EMAIL_LAST_TRY>{STATE['EMAIL_LAST_TRY']}</EMAIL_LAST_TRY>
-   <EMAIL_LAST_INTERVAL>{STATE['EMAIL_LAST_INTERVAL']}</EMAIL_LAST_INTERVAL>
+   <EMAIL_ATTEMPTS>{state['EMAIL_ATTEMPTS']}</EMAIL_ATTEMPTS>
+   <EMAIL_SUCCESS>{state['EMAIL_SUCCESS']}</EMAIL_SUCCESS>
+   <EMAIL_LAST_TRY>{state['EMAIL_LAST_TRY']}</EMAIL_LAST_TRY>
+   <EMAIL_LAST_INTERVAL>{state['EMAIL_LAST_INTERVAL']}</EMAIL_LAST_INTERVAL>
 </nutcemail>
 """
 
@@ -380,34 +400,35 @@ PAGE_FIELDS: dict[str, dict[str, str]] = {
 _KEY_FIELDS = {"WIFI_KEY": "WIFI_KEY", "WIFI_KEY2": "WIFI_KEY2"}
 
 
-def _apply_form(path: str, form) -> None:
+def _apply_form(path: str, form, state: dict | None = None) -> None:
+    state = _view(state)
     spec = PAGE_FIELDS.get(path, {})
     sent = dict(form.multi_items())
     for key, value in form.multi_items():
         if key in _KEY_FIELDS:
             if value != KEY_SENTINEL:
-                STATE[key] = str(value)
+                state[key] = str(value)
             continue
         kind = spec.get(key)
         if kind is None:
             continue  # unknown/display field — the device ignores those too
         try:
             if kind == _TENTHS:
-                STATE[key] = int(round(float(value) * 10))
+                state[key] = int(round(float(value) * 10))
             elif kind == _INT:
-                STATE[key] = int(str(value).strip() or 0)
+                state[key] = int(str(value).strip() or 0)
             elif kind == "timer":
-                STATE["TIMER_CURR"] = str(value)
+                state["TIMER_CURR"] = str(value)
             else:
-                STATE[key] = str(value)
+                state[key] = str(value)
         except ValueError:
             continue  # garbage in, ignored — like the device's CGI
     if path == "/email.htm" and sent.get("SMTP_NOW") == "1":
-        STATE["EMAILS_SENT"] += 1
-        STATE["EMAIL_ATTEMPTS"] += 1
-        STATE["EMAIL_SUCCESS"] += 1
-        STATE["EMAIL_LAST_TRY"] = 0
-        STATE["EMAIL_LAST_INTERVAL"] = 0
+        state["EMAILS_SENT"] += 1
+        state["EMAIL_ATTEMPTS"] += 1
+        state["EMAIL_SUCCESS"] += 1
+        state["EMAIL_LAST_TRY"] = 0
+        state["EMAIL_LAST_INTERVAL"] = 0
 
 
 # ---------------------------------------------------------------------------
@@ -421,10 +442,13 @@ async def _record_request(request: Request, call_next):
     return await call_next(request)
 
 
-def _page(name: str) -> HTMLResponse:
+def _page(name: str, state: dict | None = None) -> HTMLResponse:
     path = FIXTURES_DIR / name
     if path.exists():
-        return HTMLResponse(path.read_text())
+        try:
+            return HTMLResponse(_render_page(name, _view(state)))
+        except ValueError:  # a setting that is not a number: serve the fixture
+            pass
     return HTMLResponse(f"<html><body>Fake CyberQ ({name})</body></html>")
 
 
@@ -440,14 +464,15 @@ _EMAIL_FIELD_MAP = {
 }
 
 
-def _render_email_page() -> str:
+def _render_email_page(state: dict | None = None) -> str:
+    state = _view(state)
     html = (FIXTURES_DIR / "email.htm").read_text()
     for field in _EMAIL_FIELD_MAP:
         pattern = re.compile(
             rf'(<input\b[^>]*name="{field}"[^>]*value=")[^"]*(")', re.I
         )
         html, count = pattern.subn(
-            lambda m: m.group(1) + _esc(STATE[field]) + m.group(2), html
+            lambda m: m.group(1) + _esc(state[field]) + m.group(2), html
         )
         if count != 1:
             # email page is optional at runtime; fall back to the fixture
@@ -460,18 +485,19 @@ def _js_sub(html: str, field: str, value: object) -> tuple[str, int]:
     return pattern.subn(lambda m: m.group(1) + _esc(value) + m.group(2), html)
 
 
-def _render_wifi_page() -> str:
+def _render_wifi_page(state: dict | None = None) -> str:
+    state = _view(state)
     html = (FIXTURES_DIR / "wifi.htm").read_text()
     for field in ("MULTI_WIFI_CHOICE", "HTTP_USER", "HTTP_PORT",
                   "IP", "GW", "NM", "DNS", "SSID",
                   "IP2", "GW2", "NM2", "DNS2", "SSID2"):
-        html, count = _js_sub(html, field, STATE[field])
+        html, count = _js_sub(html, field, state[field])
         if count != 1:
             return (FIXTURES_DIR / "wifi.htm").read_text()
     for var, key in (("dhcpVal1", "DHCP"), ("dhcpVal2", "DHCP2")):
         pattern = re.compile(rf'(\bvar {var}\s*=\s*")\d+(")')
         html, count = pattern.subn(
-            lambda m: m.group(1) + str(STATE[key]) + m.group(2), html
+            lambda m: m.group(1) + str(state[key]) + m.group(2), html
         )
         if count != 1:
             return (FIXTURES_DIR / "wifi.htm").read_text()
@@ -481,10 +507,70 @@ def _render_wifi_page() -> str:
                       ("wifiEncReset('WIFI_ENC2',", "WIFI_ENC2")):
         pattern = re.compile(re.escape(call) + r'\s*"\d+"')
         html, count = pattern.subn(
-            lambda m: call + f'"{STATE[key]}"', html
+            lambda m: call + f'"{state[key]}"', html
         )
         if count != 1:
             return (FIXTURES_DIR / "wifi.htm").read_text()
+    return html
+
+
+# The main, control and system pages carry the settings the same way, in each
+# page's initForm() (and the unit, as ``displayInF``): rewrite those literals
+# from state too. A rule that does not match exactly once means a page shape
+# we do not know, so that page is then served untouched.
+_TEMPLATE_PATTERNS = {
+    # kind: regex whose two groups bracket the old literal
+    "text": r'(\.{field}\.value\s*=\s*")[^"]*(")',
+    "tenths": r'(\.{field}\.value\s*=\s*TempPICToHTML\()\d+(,)',
+    "index": r'(\.{field}\.selectedIndex\s*=\s*)\d+()',
+    "number": r'(\.{field}\.value\s*=\s*)\d+()',
+    "var": r'(\bvar\s+{field}\s*=\s*)\d+()',
+}
+
+#: page -> ((kind, literal on the page, key in state), ...)
+_PAGE_TEMPLATE: dict[str, tuple] = {
+    "index.html": (
+        ("text", "COOK_NAME", "COOK_NAME"),
+        ("text", "FOOD1_NAME", "FOOD1_NAME"),
+        ("text", "FOOD2_NAME", "FOOD2_NAME"),
+        ("text", "FOOD3_NAME", "FOOD3_NAME"),
+        ("tenths", "_COOK_SET", "COOK_SET"),
+        ("tenths", "_FOOD1_SET", "FOOD1_SET"),
+        ("tenths", "_FOOD2_SET", "FOOD2_SET"),
+        ("tenths", "_FOOD3_SET", "FOOD3_SET"),
+        ("var", "displayInF", "DEG_UNITS"),
+    ),
+    "control.htm": (
+        ("index", "TIMEOUT_ACTION", "TIMEOUT_ACTION"),
+        ("tenths", "_COOKHOLD", "COOKHOLD"),
+        ("tenths", "_ALARMDEV", "ALARMDEV"),
+        ("index", "COOK_RAMP", "COOK_RAMP"),
+        ("index", "OPENDETECT", "OPENDETECT"),
+        ("number", "CYCTIME", "CYCTIME"),
+        ("tenths", "_PROPBAND", "PROPBAND"),
+        ("var", "displayInF", "DEG_UNITS"),
+    ),
+    "system.htm": (
+        ("index", "MENU_SCROLLING", "MENU_SCROLLING"),
+        ("number", "LCD_BACKLIGHT", "LCD_BACKLIGHT"),
+        ("number", "LCD_CONTRAST", "LCD_CONTRAST"),
+        ("index", "DEG_UNITS", "DEG_UNITS"),
+        ("index", "ALARM_BEEPS", "ALARM_BEEPS"),
+        ("index", "KEY_BEEPS", "KEY_BEEPS"),
+    ),
+}
+
+
+def _render_page(name: str, state: dict) -> str:
+    """A fixture page with the current settings templated into it."""
+    html = (FIXTURES_DIR / name).read_text()
+    for kind, literal, key in _PAGE_TEMPLATE.get(name, ()):
+        pattern = re.compile(_TEMPLATE_PATTERNS[kind].format(field=re.escape(literal)))
+        value = state[key]
+        new = _esc(value) if kind == "text" else str(int(value))
+        html, count = pattern.subn(lambda m: m.group(1) + new + m.group(2), html)
+        if count != 1:
+            return (FIXTURES_DIR / name).read_text()  # unfamiliar page: untouched
     return html
 
 
@@ -632,3 +718,19 @@ async def get_log() -> JSONResponse:
 async def clear_log() -> JSONResponse:
     REQUESTS.clear()
     return JSONResponse({"cleared": True})
+
+
+# ---------------------------------------------------------------------------
+# the wire format, for the simulator
+# ---------------------------------------------------------------------------
+#: ``sim/server.py`` puts a live model behind this same wire format. It
+#: renders and applies forms through these (the underscored names above are
+#: this module's own), so there is exactly one definition of every byte.
+render_page = _render_page
+render_all_xml = _all_xml
+render_status_xml = _status_xml
+render_config_xml = _config_xml
+render_email_xml = _email_xml
+render_email_page = _render_email_page
+render_wifi_page = _render_wifi_page
+apply_form = _apply_form
