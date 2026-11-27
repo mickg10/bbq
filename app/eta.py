@@ -48,6 +48,8 @@ def _probe(conn: sqlite3.Connection, probe: str, latest: dict[str, Any] | None, 
         return {**none, "reason": "done"}
 
     window = _readings(conn, probe, int(latest["ts"]), eta.WINDOW_MIN, step=60)
+    if len(window) < 2:  # the model needs the pit: none while its probe is out
+        return {**none, "reason": "no pit reading"}
     history = _readings(conn, probe, int(latest["ts"]), eta.HISTORY_H * 60.0, step=300)
     estimate = eta.estimate(window, set_f, history=history if history.span_min > window.span_min + 1 else None)
     if estimate.state == "none":

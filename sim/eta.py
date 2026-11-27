@@ -108,6 +108,8 @@ class Window:
 
     @property
     def span_min(self) -> float:
+        if len(self.times) < 2:
+            return 0.0
         return (self.times[-1] - self.times[0]) / 60.0
 
 

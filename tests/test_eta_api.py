@@ -179,3 +179,14 @@ def test_the_image_gets_the_simulator_files_the_app_imports(tmp_path):
     )
     assert run.returncode == 0, run.stderr
     assert run.stdout.strip() == "sim.eta"
+
+
+def test_with_the_pit_probe_out_it_says_so_instead_of_failing(make_app):
+    """Real case: the pit probe unplugged (cook reads OPEN) while food1 reads."""
+    app = make_app()
+    with TestClient(app) as client:
+        seed(app.state.conn, [a_sample(food1=temp, cook=None) for temp in rising()])
+        response = client.get("/api/eta")
+    assert response.status_code == 200
+    assert response.json()["probes"]["food1"] == {"state": "none", "reason": "no pit reading"}
+    assert response.json()["probes"]["food2"]["state"] == "none"
