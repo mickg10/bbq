@@ -221,10 +221,11 @@ follows them (see `docs/SIMULATOR.md`):
   corrections in `docs/SIMULATOR.md`.
 - Until question 1 or 2 is answered, `sim/controllers/firmware.py` has
   nothing to implement: there is no verified law to reimplement.
-- A recorded cook is the other way to the law. `sim fit` and `sim identify`
-  can settle P against PI and the band from the fan demand the device reports
-  against the pit error, provided the recording has the pit probe plugged in
-  and the sampling is at least as fast as the device updates (its own page
-  polls once a second).
+- A recorded cook is the other way to the law. `sim identify` (see
+  `docs/SIMULATOR.md`) fits P, P with an offset, PI and PI with a rate term to
+  the fan demand the device reports against the pit error, and says which fits.
+  It needs the pit probe plugged in, and a stretch with the output off its
+  limits: at 0 or 100 % every law looks the same. `sim fit` needs no law: it
+  can run open loop, on the recorded output.
 - The device's reported temperature is already smoothed with weight 1/8; a
   fit should expect that lag once the scan period is known.

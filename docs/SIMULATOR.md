@@ -28,7 +28,9 @@ sim/
   summary.py      what a run adds up to: its summary, and the scorecard table
   history.py      recorded history: reading it, replaying it through the model, scoring it
   fit.py          system identification: fit plant parameters from the dashboard's SQLite history
-  cli.py          python -m sim run|serve|fit|compare
+  identify.py     which control law a recording shows: P, P + offset, PI, PI + a rate term,
+                  fitted to the recorded fan output
+  cli.py          python -m sim run|serve|fit|compare|identify
 scenarios/        brisket-12h.yaml, ribs-6h.yaml, lid-open.yaml, fuel-out.yaml, cold-windy.yaml
 tests/sim/        deterministic (seeded) unit tests and scenario regression tests
 ```
@@ -51,6 +53,18 @@ tests/sim/        deterministic (seeded) unit tests and scenario regression test
 - **Skip lids** (`--skip 4h55m:5h40m`). A recording cannot say when the lid came off. Its aftermath, about two hours while the pit finds its level again, is not the plant's doing and will dominate the fit if it is left in.
 
 A recording with no heat-up in it has nothing to teach about the plant. `fit` says so rather than fitting anyway, and gives what such a recording can: the air temperature and the probes' noise.
+
+## Which control law a recording shows
+`sim identify` reads the control law black-box, from the same table. It fits candidates to what the device reported for its fan (`output_pct`) against its error (set − pit), and says which fits, with what numbers and what residual. With the law not found in the firmware, a recorded cook is the way to it.
+
+- **The candidates**, simplest first: P (`100 · err / band`); P with a fixed offset; PI; PI with a term against the pit's rate of rise. An integral law has no offset of its own: it would be the integral's starting value, which is fitted too (one per unbroken stretch, since the device's is not known). Each law is run over the recorded samples, with the simulator's anti-windup, and fitted to minimise the RMS error in percentage points.
+- **Selection.** A law is selected only if it cuts the RMS error of *every* simpler law by over 10 % and over 0.5 points. Output is recorded in whole percent, so less than that is noise. Comparing each law only with the one before it would let a chain of small gains add up to a selection.
+- **How well the numbers are pinned down.** Each of the selected law's numbers is then forced 20 %, 50 % and a factor of 2 from its value, the others re-fitted. "Within 20 %" means a 20 % move already made the fit worse. "Not within a factor of 2" means halving or doubling left it as good as the best fit, and that number is not a finding. Where the integral is frozen or saturated for most of a recording, its starting value comes out that way while the band and `ki` stay tight.
+- **Cycle time** (`--cycle 6`): the law is then evaluated once per cycle and its on-time counted in whole seconds, as on the device, and the cycle's phase is searched for. Read blind, those steps alone leave a residual of several points.
+- **It refuses, saying why**, when the recording cannot tell the laws apart: the pit probe open throughout; a constant output; under 20 minutes; or the output pinned at 0 or 100 % in all but a handful of samples, where every law looks the same. `--skip` leaves windows out (a lid that came off), as for `fit`.
+- **It reads the law against the cook setpoint.** A cook made with the ramp on has a lower target early on, so skip that part (`--skip`) or use a cook made without the ramp.
+
+It is checked against data it did not make: the simulator's own controllers, in the open loop and driving the plant, on whole-percent output with probe noise, and on the shared recorded cook (`pytest -m slow`). It cannot tell a law the device runs but none of the candidates can express.
 
 ## Baseline controller ("as documented")
 Implements what the vendor's guide (CyberQ Wi-Fi User Guide, Firmware v 2.3/3.1) and the web UI say, and no more. One thing the guide says, it cannot: the box runs a "full-time adaptive control algorithm [that] learns your pit". So the baseline is deliberately plain, and the firmware phase will confirm or correct it:
@@ -84,6 +98,7 @@ Implements what the vendor's guide (CyberQ Wi-Fi User Guide, Firmware v 2.3/3.1)
 - `python -m sim run ... --out run.csv` runs headless, as fast as possible, and writes a time series plus a summary: overshoot, settle time, fan duty and fuel used. With more than one run it prints the scorecard instead.
 - `python -m sim compare --db bbq.db --from ... --to ...` replays a recorded real cook's setpoints and ambient through the model and reports RMSE against the measured pit and food temperatures. `--open-loop` drives the plant with the recorded fan output instead, with no controller in the way.
 - `python -m sim fit --db bbq.db --out cooker.yaml` estimates the cooker's parameters from such a recording (see "Fitting a recording").
+- `python -m sim identify --db bbq.db` reports which control law a recorded cook shows, its numbers with how well the recording pins each of them down, and the residual (see "Which control law a recording shows"). It refuses, with the reason, when the recording has no closed-loop data to read.
 - The server reuses `dev/fake_cyberq.py`'s page rendering and form handling, so there is one source of truth for the wire format. The existing 73 tests must keep passing. `pytest -q` runs the fast suite; the tests that serve the simulator on a real port are marked `slow` (`pytest -m slow`).
 
 ## Firmware phase (after the simulator lands)
@@ -92,3 +107,4 @@ Implements what the vendor's guide (CyberQ Wi-Fi User Guide, Firmware v 2.3/3.1)
 - Firmware images, disassembly and decompiled output stay in a gitignored `firmware/` directory and are never pushed to the public repo, because they're vendor code. Only our own write-up of the algorithm and `controllers/firmware.py`, a clean reimplementation, may be published, subject to Mick's OK.
 - Deliverable: `docs/FIRMWARE-CONTROL.md`. It describes the control law (P/PI/PID terms, any integral windup handling, cycle-time PWM, lid-detect thresholds, ramp formula, units and fixed-point scaling), with addresses as evidence. Plus `controllers/firmware.py`, and a comparison of baseline vs firmware controller across all scenarios.
 - Status of that phase is kept in [`FIRMWARE-CONTROL.md`](FIRMWARE-CONTROL.md): what the firmware has been shown to do, and what is still open.
+- The law was not located in the image, so the route to it is recorded cooks: `sim identify` (see "Which control law a recording shows"). `controllers/firmware.py` stays a placeholder until a law is verified that way.

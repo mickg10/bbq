@@ -1,4 +1,4 @@
-"""Command line for the simulator: ``python -m sim run|serve|fit|compare``.
+"""Command line for the simulator: ``python -m sim run|serve|fit|compare|identify``.
 
     python -m sim run                                  # scorecard: every scenario, its own controller
     python -m sim run --controller proportional,bias,pi
@@ -7,6 +7,7 @@
     python -m sim serve --speed 60 --port 8099         # a live CyberQ for the dashboard
     python -m sim compare --db bbq.db                  # a recorded cook through the model
     python -m sim fit --db bbq.db --out cooker.yaml    # the cooker's parameters from one
+    python -m sim identify --db bbq.db                 # which control law a recorded cook shows
 
 Scenarios live in ``scenarios/`` (``sim/scenario.py``); a name without a
 path is looked up there. See docs/SIMULATOR.md.
@@ -43,6 +44,15 @@ from sim.history import (
     replay,
     score,
     write_comparison_csv,
+)
+from sim.identify import (
+    DEFAULT_EVALUATIONS,
+    DEFAULT_RATE_WINDOW_MIN,
+    LAWS,
+    IdentifyError,
+    format_identification,
+    identify,
+    segments_from_track,
 )
 from sim.run import DEFAULT_SAMPLE_S, run_scenario, write_csv
 from sim.scenario import (
@@ -363,6 +373,33 @@ def _fit(args: argparse.Namespace) -> int:
     return 0
 
 
+def _identify(args: argparse.Namespace) -> int:
+    with contextlib.closing(open_history(args.db)) as conn:
+        track = load_track(conn, _when(args.t_from) if args.t_from else None, _when(args.t_to) if args.t_to else None)
+    if track.skipped:
+        # the longest unbroken stretch is what was loaded; say so (as `compare`
+        # does), on stderr with the other diagnostics: stdout is the report
+        left_out = sum(count for _, _, count in track.skipped)
+        print(
+            f"reading the longest unbroken stretch, {len(track.times)} samples; "
+            f"{len(track.skipped)} shorter piece{'s' if len(track.skipped) != 1 else ''} skipped "
+            f"({left_out} samples)", file=sys.stderr,
+        )
+    skip = _skips(args.skip)
+    segments = segments_from_track(track, rate_window_min=args.rate_window, skip=skip)
+    plugged = sum(
+        1 for pit, fan in zip(track.readings["cook"], track.output) if pit is not None and fan is not None
+    )
+    result = identify(
+        segments, cycle_s=args.cycle, rate_window_min=args.rate_window,
+        laws=[law for law in args.law.split(",") if law], max_evaluations=args.evaluations,
+        samples_total=len(track.times) + sum(count for _, _, count in track.skipped), good_samples=plugged,
+        pin_down=not args.quick,
+    )
+    print(format_identification(result, legend=not args.no_legend))
+    return 0
+
+
 # -- entry point -------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -404,6 +441,36 @@ def build_parser() -> argparse.ArgumentParser:
     fit.add_argument("--prior", type=float, default=DEFAULT_PRIOR, help=f"pull toward the starting values, in °F² per octave (default {DEFAULT_PRIOR})")
     fit.add_argument("--out", default="cooker.yaml", metavar="FILE", help="where to write the parameters (default cooker.yaml)")
     fit.set_defaults(handler=_fit, dt=10.0)  # the plant's time constants are minutes: a coarser step fits fine
+
+    which = sub.add_parser("identify", help="which control law a recorded cook shows, and its parameters")
+    which.add_argument("--db", required=True, help="the dashboard's SQLite history (opened read-only)")
+    which.add_argument("--from", dest="t_from", default=None, metavar="WHEN", help="ISO date-time or unix seconds")
+    which.add_argument("--to", dest="t_to", default=None, metavar="WHEN")
+    which.add_argument(
+        "--skip", action="append", default=[], metavar="FROM:TO",
+        help="leave a window out, for a lid that came off: e.g. 4h55m:5h40m "
+             "(times from the recording's first sample; repeatable)",
+    )
+    which.add_argument(
+        "--cycle", type=float, default=None, metavar="SECONDS",
+        help="the device's cycle time: then the law is evaluated once per cycle and its on-time is whole "
+             "seconds (default: not assumed)",
+    )
+    which.add_argument(
+        "--rate-window", type=float, default=DEFAULT_RATE_WINDOW_MIN, metavar="MIN",
+        help=f"minutes of history behind the pit's rate of rise (default {DEFAULT_RATE_WINDOW_MIN:g})",
+    )
+    which.add_argument(
+        "--law", default=",".join(LAWS), metavar="NAMES",
+        help=f"laws to fit, comma-separated (default all of: {', '.join(LAWS)})",
+    )
+    which.add_argument("--evaluations", type=int, default=DEFAULT_EVALUATIONS, help="simplex evaluations per start (default 600)")
+    which.add_argument("--no-legend", action="store_true", help="leave out the lines under the table that explain it")
+    which.add_argument(
+        "--quick", action="store_true",
+        help="skip testing how well the recording pins the selected law's numbers down",
+    )
+    which.set_defaults(handler=_identify)
     return parser
 
 
@@ -412,7 +479,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.handler(args)
-    except (ScenarioError, HistoryError, FitError) as exc:
+    except (ScenarioError, HistoryError, FitError, IdentifyError) as exc:
         return _fail(str(exc))
     except FileNotFoundError as exc:
         return _fail(f"cannot read {exc.filename}")
