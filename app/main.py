@@ -10,6 +10,7 @@ Environment:
                 background loop — tests then drive poll_once via /api/status)
 - CONFIG_TTL    seconds to cache /api/config (default 30)
 - ETA_TTL       seconds to cache /api/eta (default 30)
+- REPORT_TTL    seconds to cache each /api/report query (default 60)
 - ALLOW_REBOOT  "1" to expose POST /api/reboot (default off). Firmware/factory
                 reset is never implemented, with or without this flag.
 
@@ -33,6 +34,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app import db
 from app import eta as food_eta
+from app import report as cook_report
 from app.device import PROBES, CyberQClient, WriteValidationError
 from app.models import (
     ControlPatch,
@@ -77,6 +79,7 @@ class Settings:
         self.poll_interval = float(env.get("POLL_INTERVAL", "5"))
         self.config_ttl = float(env.get("CONFIG_TTL", "30"))
         self.eta_ttl = float(env.get("ETA_TTL", "30"))
+        self.report_ttl = float(env.get("REPORT_TTL", "60"))
         self.allow_reboot = env.get("ALLOW_REBOOT", "0").lower() in (
             "1", "true", "yes", "on",
         )
@@ -104,6 +107,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.config_cache_ts: float = 0.0
         app.state.eta_cache: dict | None = None
         app.state.eta_cache_ts: float = 0.0
+        app.state.report_cache: dict[tuple[int | None, float | None], tuple[float, dict]] = {}
         task = None
         if settings.poll_interval > 0:
             task = asyncio.create_task(poller.run())
@@ -166,6 +170,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             request.app.state.eta_cache = food_eta.eta_report(request.app.state.conn, int(now))
             request.app.state.eta_cache_ts = now
         return request.app.state.eta_cache
+
+    @app.get("/api/report")
+    async def api_report(
+        request: Request,
+        cook: int | None = Query(default=None, ge=1, description="a cook's id (see /api/cooks)"),
+        hours: float | None = Query(default=None, gt=0.0, le=cook_report.MAX_HOURS,
+                                    description="the last this many hours; with neither, the latest cook, or else 12 h"),
+    ) -> dict:
+        """A cook as it went: the simulator's scorecard (sim/summary.py) and
+        the control law (sim/identify.py) on the stored history (app/report.py).
+        Nothing is asked of the device. Cached for REPORT_TTL seconds per query."""
+        settings: Settings = request.app.state.settings
+        now = time.time()
+        cached = request.app.state.report_cache.get((cook, hours))
+        if cached is None or now - cached[0] > settings.report_ttl:
+            try:
+                value = cook_report.cook_report(request.app.state.conn, cook=cook, hours=hours)
+            except LookupError as exc:
+                raise HTTPException(404, str(exc)) from exc
+            if len(request.app.state.report_cache) >= 32:   # `hours` is any number: do not let them pile up
+                request.app.state.report_cache.clear()
+            cached = request.app.state.report_cache[(cook, hours)] = (now, value)
+        return cached[1]
 
     # ------------------------------------------------------------------ config
 

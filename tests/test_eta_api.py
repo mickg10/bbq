@@ -162,23 +162,21 @@ def test_the_report_is_cached_for_the_ttl(make_app, monkeypatch):
 # -- what the image needs ----------------------------------------------------------------------
 
 @pytest.mark.slow
-def test_the_image_gets_the_simulator_files_the_app_imports(tmp_path):
-    """The Dockerfile copies three files from sim/, by name. With only those
-    present the app must still import: it must not reach for the rest."""
+def test_the_image_gets_the_simulator_the_app_imports(tmp_path):
+    """The Dockerfile copies the whole sim/ package, and the app must still
+    import with only what the image is given: app/, static/ and sim/."""
     dockerfile = (ROOT / "Dockerfile").read_text()
-    match = re.search(r"^COPY ((?:sim/\S+(?: |$))+)\./sim/$", dockerfile, re.M)
-    assert match, "the Dockerfile no longer copies anything from sim/"
+    assert re.search(r"^COPY sim ./sim$", dockerfile, re.M), "the Dockerfile no longer ships the simulator"
     tree = tmp_path / "srv"
-    shutil.copytree(ROOT / "app", tree / "app", ignore=shutil.ignore_patterns("__pycache__"))
-    for name in match.group(1).split():
-        (tree / name).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(ROOT / name, tree / name)
+    for folder in ("app", "sim"):
+        shutil.copytree(ROOT / folder, tree / folder, ignore=shutil.ignore_patterns("__pycache__"))
+    code = ("import app.main, app.eta, app.report, sim.eta, sim.summary, sim.identify; "
+            "print(sim.summary.__name__, sim.identify.__name__)")
     run = subprocess.run(
-        [sys.executable, "-c", "import app.main, app.eta, sim.eta; print(sim.eta.__name__)"],
-        cwd=tmp_path, env={"PYTHONPATH": str(tree)}, capture_output=True, text=True,
+        [sys.executable, "-c", code], cwd=tmp_path, env={"PYTHONPATH": str(tree)}, capture_output=True, text=True,
     )
     assert run.returncode == 0, run.stderr
-    assert run.stdout.strip() == "sim.eta"
+    assert run.stdout.strip() == "sim.summary sim.identify"
 
 
 def test_with_the_pit_probe_out_it_says_so_instead_of_failing(make_app):

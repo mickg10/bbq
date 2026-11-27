@@ -2,8 +2,10 @@
 
 Private-network web GUI, API and temperature history for the BBQ Guru
 CyberQ WiFi (FW 3.1). One Python 3.12 container:
-FastAPI + uvicorn + httpx, SQLite from the stdlib, vanilla-JS UI with
-[vendored uPlot](static/uPlot.LICENSE) graphs.
+FastAPI + uvicorn + httpx + PyYAML, SQLite from the stdlib, vanilla-JS UI with
+[vendored uPlot](static/uPlot.LICENSE) graphs. The simulator (`sim/`) ships in
+the image: its food model, scorecard and control-law fit back the ETA and
+the cook report.
 
 **Safety model (see [DESIGN.md](DESIGN.md))** — there is no raw proxy:
 
@@ -76,6 +78,7 @@ read-only and leave nothing beside it.
 | `POLL_INTERVAL` | `5`                     | seconds between polls; `0` disables the loop |
 | `CONFIG_TTL`    | `30`                    | seconds to cache `/api/config`            |
 | `ETA_TTL`       | `30`                    | seconds to cache `/api/eta`               |
+| `REPORT_TTL`    | `60`                    | seconds to cache each `/api/report` query |
 | `ALLOW_REBOOT`  | `0`                     | `1` enables the confirm-gated reboot (API and UI button) |
 
 ## API
@@ -88,6 +91,10 @@ read-only and leave nothing beside it.
 - `GET /api/eta` — for each food probe, when it will reach its setpoint, estimated
   from the stored history with the simulator's food model (`eta`, `stalled` or
   `none`, with a band in minutes); it asks nothing of the device
+- `GET /api/report?cook=<id>` or `?hours=<n>` — a cook as it went, from the stored
+  history: the simulator's scorecard (reached setpoint, overshoot, steady error,
+  fan, lid events, food done times) and the control law the fan output shows, or
+  the reason it cannot be read. Shown by `report.html`; read-only
 - `PATCH /api/probes/{cook|food1|food2|food3}` — `{"name": …, "set_f": …}`
 - `PUT /api/timer` — `{"hhmmss": "HH:MM:SS"}`
 - `PATCH /api/config/{control|system|email}` — per-section settings
@@ -130,9 +137,10 @@ a firewalled interface). The CyberQ itself has no auth worth relying on.
 ## Repo layout
 
 ```
-app/        main.py, device.py, poller.py, db.py, models.py, eta.py
-static/     index.html, app.js, app.css, vendored uPlot
-tests/      test_device_allowlist.py, test_parse.py, test_api.py, test_fake_cyberq.py, test_eta_api.py
+app/        main.py, device.py, poller.py, db.py, models.py, eta.py, report.py
+static/     index.html, app.js, report.html, report.js, common.js, chart.js, app.css, vendored uPlot
+tests/      test_device_allowlist.py, test_parse.py, test_api.py, test_fake_cyberq.py, test_eta_api.py,
+            test_report_api.py
 tests/sim/  the simulator's tests, including the dashboard run against it
 dev/        fake_cyberq.py (test double), make_fixtures.py, fixtures/ (sanitized pages)
 sim/        the simulator: plant, food, probes, controllers, device, clock, engine, server,

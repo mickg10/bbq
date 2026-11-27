@@ -6,6 +6,7 @@ device. Playwright only loads pages and moves the mouse: no forms are used.
 
 from __future__ import annotations
 
+import contextlib
 import math
 import os
 import socket
@@ -79,7 +80,10 @@ def browser():
 def dashboard_with_a_cook(tmp_path):
     """The dashboard against a fake CyberQ with a cook an hour old
     (tests/eta_device.py): the history seeded from the same script the live
-    samples follow, so the estimate has a full hour to work on at once."""
+    samples follow, so the estimate has a full hour to work on at once.
+    Yields the page's base URL and the dashboard's database path."""
+    from types import SimpleNamespace
+
     from app import db as appdb
     from app.device import parse_all_xml
     from dev import fake_cyberq
@@ -106,7 +110,7 @@ def dashboard_with_a_cook(tmp_path):
     try:
         _wait(f"http://127.0.0.1:{fake_port}/all.xml")
         _wait(f"http://127.0.0.1:{app_port}/healthz")
-        yield f"http://127.0.0.1:{app_port}"
+        yield SimpleNamespace(url=f"http://127.0.0.1:{app_port}", db=db, started=started)
     finally:
         for proc in (app, fake):
             proc.terminate()
@@ -118,7 +122,7 @@ def test_food_cards_show_when_the_food_will_be_done(dashboard_with_a_cook, brows
     import re
 
     page = browser.new_page(viewport={"width": 1280, "height": 1100})
-    page.goto(dashboard_with_a_cook, wait_until="networkidle")
+    page.goto(dashboard_with_a_cook.url, wait_until="networkidle")
     eta1 = page.locator("#eta-food1")
     eta1.wait_for(state="visible", timeout=3000)
     # asked for with the page, not on the first 10-second tick: up within three seconds
@@ -133,6 +137,42 @@ def test_food_cards_show_when_the_food_will_be_done(dashboard_with_a_cook, brows
     assert page.locator("#eta-food2").get_attribute("title").startswith("195 °F at about ")
     assert page.locator("#eta-food3").inner_text() == ""        # open: nothing shown
     assert page.locator("#eta-cook").count() == 0               # the cook card has no such line
+    page.close()
+
+
+def test_the_cook_report_renders_for_a_span_and_for_a_cook(dashboard_with_a_cook, browser):
+    import sqlite3
+
+    page = browser.new_page(viewport={"width": 1280, "height": 1500})
+
+    # the last two hours: the hour of history that was seeded
+    page.goto(f"{dashboard_with_a_cook.url}/report.html?hours=2", wait_until="networkidle")
+    page.wait_for_function("document.querySelector('#scorecard').textContent.includes('Setpoint')", timeout=8000)
+    shown = page.locator("#report-range").inner_text()
+    assert "The last 2 h" in shown and "samples" in shown
+    score = page.locator("#scorecard").inner_text()
+    assert "Setpoint" in score and "225 °F" in score and "Fan, mean" in score
+    food = page.locator("#food").inner_text()
+    assert "Food 1" in food and "not done" in food and "Food 2" in food and "stalled at" in food
+    assert "No lid event" in page.locator("#lid").inner_text()
+    verdict = page.locator("#verdict").inner_text()
+    assert "No verdict:" in verdict or "RMS error" in verdict    # the law, or why there is none
+    page.locator("#chart .u-over").wait_for(timeout=8000)        # the same chart as the dashboard
+
+    # a cook on record, started where the seeded history does
+    made = page.request.post(f"{dashboard_with_a_cook.url}/api/cooks", data={"name": "report test"}).json()
+    with contextlib.closing(sqlite3.connect(dashboard_with_a_cook.db)) as conn:
+        conn.execute("UPDATE cooks SET started_ts = ? WHERE id = ?", (dashboard_with_a_cook.started, made["id"]))
+        conn.commit()
+    page.goto(f"{dashboard_with_a_cook.url}/report.html?cook={made['id']}", wait_until="networkidle")
+    page.wait_for_function("document.querySelector('#report-range').textContent.includes('report test')", timeout=8000)
+    assert f"Cook #{made['id']}, “report test”" in page.locator("#report-range").inner_text()
+    assert page.locator("#scorecard .kv-row").count() >= 4
+
+    # and a cook that does not exist
+    page.goto(f"{dashboard_with_a_cook.url}/report.html?cook=424242", wait_until="networkidle")
+    page.wait_for_function("document.querySelector('#report-range').textContent.includes('No report')", timeout=8000)
+    assert "no cook 424242" in page.locator("#report-range").inner_text()
     page.close()
 
 

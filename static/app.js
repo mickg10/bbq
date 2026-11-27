@@ -1,6 +1,8 @@
 /* BBQ dashboard logic (task 5) — vanilla JS, no build step.
  *
  * Talks only to this server's API (/api/*), never to the device directly.
+ * common.js and chart.js are shared with report.html; they load first.
+ *
  * Status polling every 2 s; when the food will be done every 10 s; the
  * history chart via uPlot (vendored).
  */
@@ -23,17 +25,6 @@ const RANGES = {
   cook: { seconds: null, step: 60 }, // from the active cook's start
 };
 
-const SERIES = [
-  { key: "cook", label: "Cook", color: "#ff7043", width: 2 },
-  { key: "food1", label: "Food 1", color: "#42a5f5", width: 2 },
-  { key: "food2", label: "Food 2", color: "#66bb6a", width: 2 },
-  { key: "food3", label: "Food 3", color: "#ab47bc", width: 2 },
-  { key: "cook_set", label: "Cook set", color: "#8d6e63", width: 1 },
-  { key: "food1_set", label: "Food 1 set", color: "#5c8fb7", width: 1 },
-  { key: "food2_set", label: "Food 2 set", color: "#4e7d52", width: 1 },
-  { key: "food3_set", label: "Food 3 set", color: "#7d5688", width: 1 },
-];
-
 const state = {
   sample: null,
   device: null,
@@ -43,20 +34,6 @@ const state = {
   plot: null,
   config: null,
 };
-
-const $ = (id) => document.getElementById(id);
-
-async function fetchJSON(url, options) {
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    let detail = "";
-    try {
-      detail = (await response.json()).detail || "";
-    } catch (err) { /* not JSON */ }
-    throw new Error(`${response.status} ${response.statusText}${detail ? ` — ${detail}` : ""}`);
-  }
-  return response.json();
-}
 
 // ---------------------------------------------------------------------------
 // status polling and rendering
@@ -143,12 +120,6 @@ function renderCooks() {
   }
 }
 
-function escapeHTML(text) {
-  const div = document.createElement("div");
-  div.textContent = String(text);
-  return div.innerHTML;
-}
-
 async function pollStatus() {
   try {
     const body = await fetchJSON("/api/status");
@@ -172,11 +143,6 @@ async function pollCooks() {
 // ---------------------------------------------------------------------------
 // when the food will be done (GET /api/eta)
 // ---------------------------------------------------------------------------
-
-function fmtClock(ts) {
-  const d = new Date(ts * 1000);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
 
 function fmtBand(minutes) {
   if (minutes < 90) return `±${Math.round(minutes)} min`;
@@ -344,84 +310,6 @@ async function endCook() {
 // history chart
 // ---------------------------------------------------------------------------
 
-/** Hover popup: time plus each series' value, in that series' colour.
- * Series with no value at the cursor are left out. */
-function tooltipPlugin() {
-  let tip;
-  return {
-    hooks: {
-      init: (u) => {
-        tip = document.createElement("div");
-        tip.className = "chart-tip hidden";
-        u.over.appendChild(tip);
-        u.over.addEventListener("mouseleave", () => tip.classList.add("hidden"));
-      },
-      setCursor: (u) => {
-        const idx = u.cursor.idx;
-        if (idx === null || idx === undefined || u.cursor.left < 0) {
-          tip.classList.add("hidden");
-          return;
-        }
-        // Over a gap (device off), the nearest point can be hours away: show
-        // nothing rather than a reading from another time.
-        const step = (RANGES[state.range] || {}).step || 60;
-        if (Math.abs(u.posToVal(u.cursor.left, "x") - u.data[0][idx]) > Math.max(2 * step, 10)) {
-          tip.classList.add("hidden");
-          return;
-        }
-        const rows = [];
-        SERIES.forEach((s, i) => {
-          const v = u.data[i + 1][idx];
-          if (v === null || v === undefined || !u.series[i + 1].show) return;
-          rows.push(
-            `<div class="tip-row"><i style="background:${s.color}"></i>` +
-            `<span>${s.label}</span><b style="color:${s.color}">${v.toFixed(1)} °F</b></div>`
-          );
-        });
-        if (!rows.length) { tip.classList.add("hidden"); return; }
-        const when = new Date(u.data[0][idx] * 1000).toLocaleString([], {
-          month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
-        });
-        tip.innerHTML = `<div class="tip-time">${when}</div>${rows.join("")}`;
-        tip.classList.remove("hidden");
-        const { left, top } = u.cursor;
-        const w = tip.offsetWidth, h = tip.offsetHeight;
-        const ow = u.over.clientWidth, oh = u.over.clientHeight;
-        tip.style.left = `${left + 14 + w > ow ? left - w - 14 : left + 14}px`;
-        tip.style.top = `${Math.max(0, Math.min(top - h / 2, oh - h))}px`;
-      },
-    },
-  };
-}
-
-function chartOptions() {
-  return {
-    plugins: [tooltipPlugin()],
-    width: Math.min($("chart").clientWidth || 900, 1040),
-    height: 360,
-    cursor: { drag: { x: true, y: false } },
-    legend: { live: false },
-    scales: { x: { time: true } },
-    axes: [
-      {},
-      {
-        label: "°F",
-        values: (self, ticks) => ticks.map((v) => v.toFixed(0)),
-      },
-    ],
-    series: [
-      {},
-      ...SERIES.map((s) => ({
-        label: s.label,
-        stroke: s.color,
-        width: s.width,
-        points: { show: false },
-        spanGaps: false,
-      })),
-    ],
-  };
-}
-
 async function loadHistory() {
   const range = RANGES[state.range];
   const now = Math.floor(Date.now() / 1000);
@@ -445,14 +333,11 @@ async function loadHistory() {
       return;
     }
     $("chart-empty").classList.add("hidden");
-    const data = [
-      points.map((p) => p.ts),
-      ...SERIES.map((s) => points.map((p) => p[s.key] ?? null)),
-    ];
+    const data = chartData(points);
     if (state.plot) {
       state.plot.setData(data);
     } else {
-      state.plot = new uPlot(chartOptions(), data, $("chart"));
+      state.plot = new uPlot(chartOptions($("chart"), () => (RANGES[state.range] || {}).step || 60), data, $("chart"));
       window.addEventListener("resize", () => {
         state.plot.setSize({
           width: Math.min($("chart").clientWidth || 900, 1040),
@@ -464,10 +349,6 @@ async function loadHistory() {
     $("chart-empty").textContent = `History unavailable: ${err.message}`;
     $("chart-empty").classList.remove("hidden");
   }
-}
-
-function emptyChartData() {
-  return [new Array(0), ...SERIES.map(() => new Array(0))];
 }
 
 /** The chart range survives a reload: ?range= in the URL wins, then the

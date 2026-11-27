@@ -68,6 +68,8 @@ A recording with no heat-up in it has nothing to teach about the plant. `fit` sa
 
 It is checked against data it did not make: the simulator's own controllers, in the open loop and driving the plant, on whole-percent output with probe noise, and on the shared recorded cook (`pytest -m slow`). It cannot tell a law the device runs but none of the candidates can express.
 
+The dashboard's cook report (`GET /api/report`, `app/report.py`) runs this on a stored cook, leaving the lid's windows out of the fit as `--skip` does, and shows the verdict or the refusal.
+
 ## When the food will be done
 The dashboard's `GET /api/eta` answers, for each food probe, when its reading will reach its setpoint (the device's DONE). `eta.py` runs the food model of `food.py` forward, the pit held where it was for the last quarter of an hour, until the food gets there. It needs the piece's time constant and how much moisture it has left, and where each comes from depends on where the food is:
 

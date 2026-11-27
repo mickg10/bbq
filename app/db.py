@@ -121,6 +121,16 @@ def history(conn: sqlite3.Connection, t_from: int, t_to: int, step: int) -> list
     return points
 
 
+def samples_between(conn: sqlite3.Connection, t_from: int, t_to: int) -> list[dict]:
+    """Every stored sample from ``t_from`` to ``t_to`` (unix seconds), in time
+    order, with the statuses: what a cook report is computed from."""
+    rows = conn.execute(
+        "SELECT * FROM samples WHERE ts >= ? AND ts <= ? ORDER BY ts",
+        (t_from, t_to),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def add_audit(
     conn: sqlite3.Connection,
     ts: int,

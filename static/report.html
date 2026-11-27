@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BBQ · Cook report</title>
+  <link rel="stylesheet" href="uPlot.min.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header>
+    <div class="brand">🔥 BBQ <span>Cook report</span></div>
+    <nav id="report-nav">
+      <a class="btn" href="/">Dashboard</a>
+      <select id="cook-pick" aria-label="Cook"></select>
+      <span id="span-pick">
+        <a class="btn" href="report.html?hours=6">6 h</a>
+        <a class="btn" href="report.html?hours=12">12 h</a>
+        <a class="btn" href="report.html?hours=24">24 h</a>
+      </span>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="card-title" id="report-title">Cook report</div>
+      <div id="report-range" class="muted">loading…</div>
+    </section>
+
+    <section class="card chart-card">
+      <div class="card-title">Temperature history</div>
+      <div id="chart"></div>
+      <div id="chart-empty" class="muted hidden" style="padding: 24px 4px">No samples in this range.</div>
+    </section>
+
+    <section class="row">
+      <div class="card">
+        <div class="card-title">How the control did</div>
+        <div id="scorecard"></div>
+        <div class="report-sub">The lid</div>
+        <div id="lid"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Food</div>
+        <div id="food"></div>
+      </div>
+    </section>
+
+    <section class="card report-wide">
+      <div class="card-title">Control law</div>
+      <div id="verdict"></div>
+    </section>
+  </main>
+
+  <script src="uPlot.min.js"></script>
+  <script src="common.js"></script>
+  <script src="chart.js"></script>
+  <script src="report.js"></script>
+</body>
+</html>

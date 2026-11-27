@@ -8,6 +8,10 @@ dependencies = [
     "fastapi>=0.115",
     "httpx>=0.27",
     "uvicorn>=0.30",
+    # the simulator ships in the image (its food model, scorecard and
+    # control-law fit back the ETA and the cook report) and reads its
+    # scenarios with it
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

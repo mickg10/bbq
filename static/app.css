@@ -360,3 +360,39 @@ dialog .confirm-label {
 }
 dialog .confirm-label input { width: auto; margin: 0; }
 .danger-text { color: var(--alarm); }
+
+/* cook report (report.html) */
+#report-nav { display: flex; align-items: center; gap: 10px; }
+#cook-pick {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font: inherit;
+}
+.report-note { margin: 2px 0 8px; }
+.report-sub {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.report-wide { margin-top: 14px; }
+.report-law { font-size: 20px; font-weight: 700; }
+.report-line { margin: 4px 0 8px; overflow-wrap: anywhere; }
+.report-pre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.report-error { color: var(--alarm); }
