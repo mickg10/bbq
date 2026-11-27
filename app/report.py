@@ -273,6 +273,8 @@ def _scorecard(grid: Sequence[dict], events: Sequence[dict[str, Any]]) -> dict[s
         del summary[key]
     # a plateau far from the setpoint is the cooker idle, or not up to temperature yet
     summary["off_target"] = summary["steady_error_f"] is not None and abs(summary["steady_error_f"]) > OFF_TARGET_F
+    # with none of these there is nothing to score the control on, whatever the rest says
+    summary["pit_readings"] = sum(1 for row in grid if row["cook"] is not None)
     if summary["to_setpoint_s"] is not None:
         summary["to_setpoint_ts"] = started + summary["to_setpoint_s"]
     if summary["settled_at_s"] is not None:

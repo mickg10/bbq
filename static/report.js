@@ -66,15 +66,21 @@ function scorecardHtml(summary) {
   const out = [];
   const satAt = summary.setpoint_f + (summary.steady_error_f ?? 0);
   out.push(kv("Setpoint", `${num(summary.setpoint_f, 0)} °F`));
-  out.push(kv("Reached it", summary.to_setpoint_ts === undefined
+  const pitOut = summary.pit_readings === 0;           // the probe read OPEN for the whole stretch
+  out.push(kv("Reached it", pitOut ? "pit probe out" : summary.to_setpoint_ts === undefined
     ? "never"
     : `${clock(summary.to_setpoint_ts)}, ${fmtDuration(summary.to_setpoint_s)} after the start`));
-  out.push(kv("Overshoot", `${num(summary.overshoot_f)} °F`));
+  out.push(kv("Overshoot", pitOut ? "pit probe out" : `${num(summary.overshoot_f)} °F`));
   out.push(kv("Held steady for", summary.held_s ? fmtDuration(summary.held_s) : "–"));
-  if (summary.off_target) {
+  if (pitOut) {
+    out.push(note("The pit probe read OPEN for the whole stretch: nothing to score the control on."));
+  } else if (summary.off_target) {
     out.push(kv("Where it sat", `${num(satAt, 0)} °F, ${num(Math.abs(summary.steady_error_f), 0)} °F `
       + `${summary.steady_error_f < 0 ? "under" : "over"} the setpoint`));
     out.push(note("The pit never held near its setpoint: the cooker was idle, or did not get up to temperature."));
+  } else if (summary.settled_at_ts === undefined) {
+    out.push(kv("Settled at", "never"));               // nothing held steady for half an hour
+    out.push(kv("Steady error", "–"));
   } else {
     out.push(kv("Settled at", `${clock(summary.settled_at_ts)}, ${fmtDuration(summary.settled_at_s)} after the start`));
     out.push(kv("Steady error", `${signed(summary.steady_error_f)} °F (spread ${num(summary.steady_sd_f)})`));

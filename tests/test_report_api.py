@@ -132,6 +132,7 @@ def test_with_the_pit_probe_out_the_whole_time_it_still_reports(make_app):
     assert score["setpoint_f"] == PIT
     assert (score["to_setpoint_s"], score["settled_at_s"], score["steady_error_f"]) == (None, None, None)
     assert score["off_target"] is False                     # nothing held, so nothing to hold against
+    assert score["pit_readings"] == 0                       # and the page says the probe was out, not "never"
     assert score["fan_mean_pct"] == 0.0
     assert score["food"]["food2"] == {"plugged": False}
     assert body["verdict"]["state"] == "refused"
@@ -149,6 +150,7 @@ def test_a_stretch_far_from_the_setpoint_is_not_called_settled(make_app):
     assert score["steady_error_f"] == pytest.approx(-114.0)
     assert score["off_target"] is True
     assert score["fan_mean_pct"] == 100.0
+    assert score["pit_readings"] == 120
 
 
 def test_an_open_pit_probe_is_a_missing_reading_never_the_last_one_repeated(make_app):

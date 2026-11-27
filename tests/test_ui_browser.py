@@ -157,6 +157,19 @@ def test_the_cook_report_renders_for_a_span_and_for_a_cook(dashboard_with_a_cook
     assert "No lid event" in page.locator("#lid").inner_text()
     verdict = page.locator("#verdict").inner_text()
     assert "No verdict:" in verdict or "RMS error" in verdict    # the law, or why there is none
+
+    # how the scorecard words what it cannot show, checked on the page's own function
+    worded = page.evaluate("""() => {
+      const base = { setpoint_f: 225, overshoot_f: 0, held_s: 0, fan_mean_pct: 10, fan_peak_pct: 20, off_target: false };
+      return {
+        nothingSettled: scorecardHtml({ ...base, pit_readings: 40, to_setpoint_s: 600, to_setpoint_ts: 1 }).join(" "),
+        pitOut: scorecardHtml({ ...base, pit_readings: 0 }).join(" "),
+      };
+    }""")
+    assert "never" in worded["nothingSettled"]                              # "Settled at: never"
+    assert "–, –" not in worded["nothingSettled"] and "(spread" not in worded["nothingSettled"]
+    assert worded["pitOut"].count("pit probe out") == 2                     # not "never" and "0.0 °F"
+    assert "never" not in worded["pitOut"] and "0.0 °F" not in worded["pitOut"]
     page.locator("#chart .u-over").wait_for(timeout=8000)        # the same chart as the dashboard
 
     # a cook on record, started where the seeded history does
