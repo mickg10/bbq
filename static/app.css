@@ -232,6 +232,7 @@ main {
 .chart-card { margin-top: 14px; }
 #range-btns { display: flex; gap: 6px; }
 #range-btns .btn { padding: 4px 10px; font-size: 13px; }
+a.btn { text-decoration: none; display: inline-block; }
 #range-btns .btn.active { background: var(--accent); border-color: var(--accent); color: #1a120c; font-weight: 600; }
 #chart { margin-top: 10px; }
 

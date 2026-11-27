@@ -109,6 +109,7 @@ function renderCooks() {
   const info = $("cook-info");
   const endBtn = $("btn-cook-end");
   state.activeCook = state.cooks.find((cook) => cook.ended_ts === null) || null;
+  $("link-report").href = state.activeCook ? `report.html?cook=${state.activeCook.id}` : "report.html";
   if (state.activeCook) {
     const started = new Date(state.activeCook.started_ts * 1000);
     info.innerHTML = `<b>${escapeHTML(state.activeCook.name)}</b><br>
