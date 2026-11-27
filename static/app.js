@@ -107,7 +107,24 @@ function renderSample() {
   $("fan-fill").style.width = `${sample.output_pct}%`;
   $("fan-pct").textContent = `${sample.output_pct}%`;
   $("timer").textContent = sample.timer_curr || "--:--:--";
-  $("timer-status").textContent = sample.timer_status === 1 ? "running" : "idle";
+  // TIMER_STATUS is a status code (OK/HOLD/ALARM/SHUTDOWN), not a run flag:
+  // "running" is inferred from the countdown changing between samples.
+  const timer = sample.timer_curr || "00:00:00";
+  if (sample.timer_status && STATUS[sample.timer_status]) {
+    $("timer-status").textContent = STATUS[sample.timer_status].toLowerCase();
+  } else {
+    // compare only across new device samples (the UI polls faster than the poller)
+    const seen = state.timerSeen;
+    if (!seen || seen.ts !== sample.ts) {
+      state.timerSeen = {
+        ts: sample.ts,
+        timer,
+        running: Boolean(seen) && timer !== "00:00:00" && timer !== seen.timer,
+      };
+    }
+    $("timer-status").textContent = timer === "00:00:00" ? "idle"
+      : state.timerSeen.running ? "running" : "paused";
+  }
 }
 
 function renderCooks() {
