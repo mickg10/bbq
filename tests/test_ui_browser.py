@@ -6,6 +6,7 @@ device. Playwright only loads pages and moves the mouse: no forms are used.
 
 from __future__ import annotations
 
+import math
 import os
 import socket
 import subprocess
@@ -72,6 +73,67 @@ def browser():
                 pytest.skip(f"no browser for playwright: {exc}")
         yield b
         b.close()
+
+
+@pytest.fixture()
+def dashboard_with_a_cook(tmp_path):
+    """The dashboard against a fake CyberQ with a cook an hour old
+    (tests/eta_device.py): the history seeded from the same script the live
+    samples follow, so the estimate has a full hour to work on at once."""
+    from app import db as appdb
+    from app.device import parse_all_xml
+    from dev import fake_cyberq
+    from tests import eta_device
+
+    fake_port, app_port = _free_port(), _free_port()
+    db = tmp_path / "eta.db"
+    started = int(time.time()) - 62 * 60           # an hour of history, and time for the app to come up
+    conn = appdb.connect(str(db))
+    for minute in range(63):
+        appdb.insert_sample(conn, started + minute * 60,
+                            parse_all_xml(fake_cyberq._all_xml(eta_device.state_at(started + minute * 60, started))))
+    conn.close()
+    uvicorn = [sys.executable, "-m", "uvicorn"]
+    fake = subprocess.Popen(
+        uvicorn + ["tests.eta_device:app", "--port", str(fake_port), "--log-level", "warning"],
+        env=dict(os.environ, ETA_COOK_START=str(started)),
+    )
+    env = dict(os.environ, CYBERQ_URL=f"http://127.0.0.1:{fake_port}",
+               DB_PATH=str(db), POLL_INTERVAL="1")
+    app = subprocess.Popen(
+        uvicorn + ["app.main:app", "--port", str(app_port), "--log-level", "warning"], env=env,
+    )
+    try:
+        _wait(f"http://127.0.0.1:{fake_port}/all.xml")
+        _wait(f"http://127.0.0.1:{app_port}/healthz")
+        yield f"http://127.0.0.1:{app_port}"
+    finally:
+        for proc in (app, fake):
+            proc.terminate()
+            proc.wait(timeout=10)
+
+
+def test_food_cards_show_when_the_food_will_be_done(dashboard_with_a_cook, browser):
+    import datetime as dt
+    import re
+
+    page = browser.new_page(viewport={"width": 1280, "height": 1100})
+    page.goto(dashboard_with_a_cook, wait_until="networkidle")
+    eta1 = page.locator("#eta-food1")
+    eta1.wait_for(state="visible", timeout=3000)
+    # asked for with the page, not on the first 10-second tick: up within three seconds
+    page.wait_for_function("document.querySelector('#eta-food1').textContent.includes('at about')", timeout=3000)
+    shown = re.fullmatch(r"203 °F at about (\d\d):(\d\d) \(±(\d+) min\)", eta1.inner_text())
+    assert shown, eta1.inner_text()
+    # a lump with a 2 h time constant, nothing evaporating, goes from 190 °F to 203 °F in 55 minutes
+    due = dt.datetime.fromtimestamp(time.time() + 2 * 3600 * math.log(35 / 22))
+    assert abs((int(shown[1]) * 60 + int(shown[2])) - (due.hour * 60 + due.minute)) <= 3
+    assert 15 <= int(shown[3]) <= 40
+    assert page.locator("#eta-food2").inner_text() == "stalled: ETA uncertain"
+    assert page.locator("#eta-food2").get_attribute("title").startswith("195 °F at about ")
+    assert page.locator("#eta-food3").inner_text() == ""        # open: nothing shown
+    assert page.locator("#eta-cook").count() == 0               # the cook card has no such line
+    page.close()
 
 
 def test_chart_hover_shows_time_and_coloured_values(dashboard, browser):

@@ -84,11 +84,13 @@ def insert_sample(conn: sqlite3.Connection, ts: int, sample: dict) -> None:
     conn.commit()
 
 
-def latest_sample(conn: sqlite3.Connection) -> dict | None:
-    """The most recent stored sample, or None (fallback when the device is
-    unreachable and nothing live is cached)."""
+def latest_sample(conn: sqlite3.Connection, ts_to: int | None = None) -> dict | None:
+    """The most recent stored sample at or before ``ts_to`` (unix seconds;
+    any, by default), or None (fallback when the device is unreachable and
+    nothing live is cached)."""
     row = conn.execute(
-        "SELECT * FROM samples ORDER BY ts DESC LIMIT 1"
+        "SELECT * FROM samples WHERE (? IS NULL OR ts <= ?) ORDER BY ts DESC LIMIT 1",
+        (ts_to, ts_to),
     ).fetchone()
     return dict(row) if row is not None else None
 

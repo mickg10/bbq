@@ -9,6 +9,7 @@ Environment:
 - POLL_INTERVAL seconds between /all.xml polls (default 5; 0 disables the
                 background loop — tests then drive poll_once via /api/status)
 - CONFIG_TTL    seconds to cache /api/config (default 30)
+- ETA_TTL       seconds to cache /api/eta (default 30)
 - ALLOW_REBOOT  "1" to expose POST /api/reboot (default off). Firmware/factory
                 reset is never implemented, with or without this flag.
 
@@ -31,6 +32,7 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.staticfiles import StaticFiles
 
 from app import db
+from app import eta as food_eta
 from app.device import PROBES, CyberQClient, WriteValidationError
 from app.models import (
     ControlPatch,
@@ -74,6 +76,7 @@ class Settings:
         self.db_path = env.get("DB_PATH", "bbq.db")
         self.poll_interval = float(env.get("POLL_INTERVAL", "5"))
         self.config_ttl = float(env.get("CONFIG_TTL", "30"))
+        self.eta_ttl = float(env.get("ETA_TTL", "30"))
         self.allow_reboot = env.get("ALLOW_REBOOT", "0").lower() in (
             "1", "true", "yes", "on",
         )
@@ -99,6 +102,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.poller = poller
         app.state.config_cache: dict | None = None
         app.state.config_cache_ts: float = 0.0
+        app.state.eta_cache: dict | None = None
+        app.state.eta_cache_ts: float = 0.0
         task = None
         if settings.poll_interval > 0:
             task = asyncio.create_task(poller.run())
@@ -149,6 +154,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         points = db.history(request.app.state.conn, t_from, t_to, step)
         return {"from": t_from, "to": t_to, "step": step, "points": points}
+
+    @app.get("/api/eta")
+    async def api_eta(request: Request) -> dict:
+        """When each food probe will reach its setpoint, estimated from the
+        stored history (app/eta.py, sim/eta.py). Nothing is asked of the
+        device. Cached for ETA_TTL seconds (30 by default)."""
+        settings: Settings = request.app.state.settings
+        now = time.time()
+        if request.app.state.eta_cache is None or now - request.app.state.eta_cache_ts > settings.eta_ttl:
+            request.app.state.eta_cache = food_eta.eta_report(request.app.state.conn, int(now))
+            request.app.state.eta_cache_ts = now
+        return request.app.state.eta_cache
 
     # ------------------------------------------------------------------ config
 

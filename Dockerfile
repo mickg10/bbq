@@ -1,7 +1,9 @@
 # BBQ — CyberQ dashboard container (task 6)
 #
 # Python 3.12, FastAPI + uvicorn + httpx only. The app runs from /srv/bbq
-# (PYTHONPATH) so the static/ UI ships next to app/ in the image.
+# (PYTHONPATH) so the static/ UI ships next to app/ in the image. From the
+# simulator come three files, and only those: the food model and the estimate
+# built on it (GET /api/eta). They use the standard library alone.
 
 FROM python:3.12-slim
 
@@ -10,6 +12,7 @@ WORKDIR /srv/bbq
 COPY pyproject.toml README.md DESIGN.md ./
 COPY app ./app
 COPY static ./static
+COPY sim/__init__.py sim/food.py sim/eta.py ./sim/
 
 RUN pip install --no-cache-dir .
 

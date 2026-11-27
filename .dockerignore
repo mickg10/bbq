@@ -9,3 +9,5 @@ dev
 bbq.db
 bbq.db-*
 opencode.json
+# vendor firmware and its analysis never enter an image, let alone the repo
+firmware

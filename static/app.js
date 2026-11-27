@@ -1,7 +1,8 @@
 /* BBQ dashboard logic (task 5) — vanilla JS, no build step.
  *
  * Talks only to this server's API (/api/*), never to the device directly.
- * Status polling every 2 s; the history chart via uPlot (vendored).
+ * Status polling every 2 s; when the food will be done every 10 s; the
+ * history chart via uPlot (vendored).
  */
 
 "use strict";
@@ -169,6 +170,51 @@ async function pollCooks() {
 }
 
 // ---------------------------------------------------------------------------
+// when the food will be done (GET /api/eta)
+// ---------------------------------------------------------------------------
+
+function fmtClock(ts) {
+  const d = new Date(ts * 1000);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function fmtBand(minutes) {
+  if (minutes < 90) return `±${Math.round(minutes)} min`;
+  const hours = minutes / 60;
+  return `±${hours < 10 ? String(Math.round(hours * 10) / 10) : String(Math.round(hours))} h`;
+}
+
+/** What a food card shows: "180 °F at about 14:35 (±20 min)", or, for a
+ *  stalled piece, "stalled: ETA uncertain" (the estimate itself in the tooltip). */
+function etaText(eta) {
+  if (!eta || eta.state === "none" || eta.eta_ts === null || eta.band_min === null) {
+    return { text: "", title: "", stalled: false };
+  }
+  const when = `about ${fmtClock(eta.eta_ts)} (${fmtBand(eta.band_min)})`;
+  if (eta.state === "stalled") {
+    return { text: "stalled: ETA uncertain", title: `${eta.set_f} °F at ${when}`, stalled: true };
+  }
+  return { text: `${eta.set_f} °F at ${when}`, title: "", stalled: false };
+}
+
+function renderEta(report) {
+  for (const probe of PROBES) {
+    const el = $(`eta-${probe.key}`);
+    if (!el) continue;
+    const shown = etaText(report.probes[probe.key]);
+    el.textContent = shown.text;
+    el.title = shown.title;
+    el.classList.toggle("stalled", shown.stalled);
+  }
+}
+
+async function pollEta() {
+  try {
+    renderEta(await fetchJSON("/api/eta"));
+  } catch (err) { /* transient: the last estimate stays up */ }
+}
+
+// ---------------------------------------------------------------------------
 // probe cards
 // ---------------------------------------------------------------------------
 
@@ -186,7 +232,8 @@ function buildProbeCards() {
       <div class="probe-temp" id="temp-${probe.key}">…</div>
       <div class="probe-meta">
         <span class="probe-set">set <b id="set-${probe.key}">–</b></span>
-      </div>`;
+      </div>
+      ${probe.key === "cook" ? "" : `<div class="probe-eta" id="eta-${probe.key}"></div>`}`;
     card.addEventListener("click", () => openProbeDialog(probe));
     container.appendChild(card);
   }
@@ -813,10 +860,12 @@ function start() {
   markRange(savedRange());
   pollStatus();
   pollCooks().then(loadHistory);
+  pollEta();
   loadConfig();
   loadFeatures();
   setInterval(pollStatus, 2000);
   setInterval(pollCooks, 30000);
+  setInterval(pollEta, 10000);  // the server caches the estimate for 30 s
   setInterval(loadConfig, 60000);
   setInterval(() => {
     if (document.visibilityState === "visible") loadHistory();

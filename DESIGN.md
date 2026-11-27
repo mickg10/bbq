@@ -50,6 +50,7 @@ Note: if HTTP_USER/HTTP_PASS gets set, the device client will need basic auth.
 ## API
 - `GET /api/status`: the latest parsed sample plus the device's reachable/stale flag
 - `GET /api/history?from=&to=&step=`: downsampled series (bucketed avg)
+- `GET /api/eta`: for each food probe, when it will reach its setpoint, estimated from the stored history with the simulator's food model (`app/eta.py`, `sim/eta.py`); `state` is `eta`, `stalled` or `none` (with a `reason`). Cached for `ETA_TTL` seconds; it never asks the device for anything
 - `GET /api/config`: control, system, email and wifi sections, with secrets redacted
 - `PATCH /api/config/{control|system|email|wifi}` (wifi needs `"confirm": true`), `POST /api/email/test`, `POST /api/wifi/scan`
 - `PATCH /api/probes/{cook|food1|food2|food3}` with `{name?, set_f?}`
@@ -58,7 +59,7 @@ Note: if HTTP_USER/HTTP_PASS gets set, the device client will need basic auth.
 - `GET /healthz`
 
 ## UI
-A single static page: vanilla JS plus uPlot, vendored. Four probe cards with temp, setpoint, status and name, a fan % gauge, the timer, edit dialogs, and a history chart with 1h/6h/24h/cook ranges. Status codes 0–7 mean OK/HIGH/LOW/DONE/ERROR/HOLD/ALARM/SHUTDOWN.
+A single static page: vanilla JS plus uPlot, vendored. Four probe cards with temp, setpoint, status and name (the food cards also show when each will be done, from `GET /api/eta`: "180 °F at about 14:35 (±20 min)", or "stalled: ETA uncertain", or nothing where there is no estimate), a fan % gauge, the timer, edit dialogs, and a history chart with 1h/6h/24h/cook ranges. Status codes 0–7 mean OK/HIGH/LOW/DONE/ERROR/HOLD/ALARM/SHUTDOWN.
 
 ## Testing
 - `fake_cyberq.py`: a tiny FastAPI app that serves the recon XML and accepts the allowlisted POSTs. All dev work and tests run against it.

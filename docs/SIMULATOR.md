@@ -30,6 +30,8 @@ sim/
   fit.py          system identification: fit plant parameters from the dashboard's SQLite history
   identify.py     which control law a recording shows: P, P + offset, PI, PI + a rate term,
                   fitted to the recorded fan output
+  eta.py          when the food will be done: the food model fitted to its history and run
+                  forward (what the dashboard's GET /api/eta answers)
   cli.py          python -m sim run|serve|fit|compare|identify
 scenarios/        brisket-12h.yaml, ribs-6h.yaml, lid-open.yaml, fuel-out.yaml, cold-windy.yaml
 tests/sim/        deterministic (seeded) unit tests and scenario regression tests
@@ -65,6 +67,25 @@ A recording with no heat-up in it has nothing to teach about the plant. `fit` sa
 - **It reads the law against the cook setpoint.** A cook made with the ramp on has a lower target early on, so skip that part (`--skip`) or use a cook made without the ramp.
 
 It is checked against data it did not make: the simulator's own controllers, in the open loop and driving the plant, on whole-percent output with probe noise, and on the shared recorded cook (`pytest -m slow`). It cannot tell a law the device runs but none of the candidates can express.
+
+## When the food will be done
+The dashboard's `GET /api/eta` answers, for each food probe, when its reading will reach its setpoint (the device's DONE). `eta.py` runs the food model of `food.py` forward, the pit held where it was for the last quarter of an hour, until the food gets there. It needs the piece's time constant and how much moisture it has left, and where each comes from depends on where the food is:
+
+- **Past the stall** nothing evaporates any more and the time constant is the one number fitted to the last 45 minutes. This is where the estimate is good.
+- **Before the stall** the time constant is fitted the same way, and the stall ahead is given the length the model's presets have for a piece of that size. How long a stall lasts cannot be known beforehand, so the band is hours wide.
+- **Stalled** (rising under 1 °F per 10 minutes, between 145 and 175 °F) a 45-minute window shows nothing. Given the last 8 hours, the time constant is read from the rise before the stall and the model is run from the stall's beginning; without them an assumed 2.5 h piece with 2 h of stall to go. The card says "stalled: ETA uncertain".
+- **Leaving the stall** the same, or without the history the assumed time constant and how far out of the stall the piece is.
+
+Only ratios are fitted (the model is given unit heat capacity). The band adds in quadrature the estimate's movement under the time constant a fifth either way and the pit a couple of degrees either way, and the scatter of the readings; wherever a stall is not over it also covers the stall lasting anything up to 6 hours in all. Nothing is estimated for a probe that is open or in error, food that is done, under 15 minutes of data, or a history more than 15 minutes stale; the endpoint reads the database only.
+
+On the scenarios' own histories (rows a minute, stored as the dashboard stores them), the estimate's error 3 h, 1 h and 15 min before the food is done:
+
+| | 3 h out | 1 h out | 15 min out |
+|---|---|---|---|
+| brisket-12h | +8 min (±66) | +7 min (±25) | +4 min (±15) |
+| ribs-6h | +76 min (±264), stalled | +36 min (±244) | +1 min (±15) |
+
+The ribs' stall is shorter than the model gives a piece of its size, which is what the two wider bands are covering. With readings noisy to ±0.4 °F and quantised to 0.5 °F, 1 estimate in 72 falls outside its band, by a few minutes on a 15-minute estimate. The tests print these numbers (`pytest -m slow tests/sim/test_eta.py -s`).
 
 ## Baseline controller ("as documented")
 Implements what the vendor's guide (CyberQ Wi-Fi User Guide, Firmware v 2.3/3.1) and the web UI say, and no more. One thing the guide says, it cannot: the box runs a "full-time adaptive control algorithm [that] learns your pit". So the baseline is deliberately plain, and the firmware phase will confirm or correct it:
