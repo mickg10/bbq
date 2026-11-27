@@ -76,7 +76,7 @@ def test_fuel_burns_down_with_the_cook(make_sim):
     assert sim.cooker.plant.fuel_btu >= 0.0
 
 
-def test_food_stalls_then_finishes_and_the_pit_goes_on_hold(make_sim):
+def test_food_stalls_then_finishes_and_the_pit_stays_on_target(make_sim):
     sim = make_sim(
         food=Food(preset("ribs"), temp_f=40.0), cook_set_f=250.0,
         food_set_f=195.0, cookhold_f=180.0, sample_every=60,
@@ -85,11 +85,11 @@ def test_food_stalls_then_finishes_and_the_pit_goes_on_hold(make_sim):
     rows = sim.rows
     done = [i for i, r in enumerate(rows) if r["food1_status"] == STATUS.DONE]
     assert done and 2 * 60 < done[0] < 5 * 60  # ribs take hours, not minutes
-    # with one food probe, done is also "all done": the pit drops to COOKHOLD
-    assert rows[done[0]]["cook_status"] == STATUS.HOLD
-    assert rows[-1]["cook_status"] == STATUS.HOLD
-    assert rows[-1]["cook_set"] == 180.0 and rows[-1]["setpoint_f"] == 180.0
-    assert rows[-1]["pit_f"] < 185.0
+    # done is not hold: the guide has cook hold coming from the timer only
+    assert rows[done[0]]["cook_status"] == STATUS.OK
+    assert rows[-1]["cook_status"] == STATUS.OK and rows[-1]["timer_status"] == STATUS.OK
+    assert rows[-1]["cook_set"] == 250.0 and rows[-1]["setpoint_f"] == 250.0
+    assert rows[-1]["pit_f"] > 210.0
     # the stall: flat in the low 150s between warming up and climbing out
     stall = [r["food1"] for r in rows if 90 * 60 <= r["t"] < 135 * 60]
     assert stall and all(145.0 < temp < 160.0 for temp in stall)

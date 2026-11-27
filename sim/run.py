@@ -25,7 +25,7 @@ CSV_COLUMNS = (
     "output_pct", *(f"{name}_status" for name in PROBE_NAMES), "timer", "timer_status",
     "pit_f", *(f"{name}_f" for name in PROBE_NAMES[1:]),
     "setpoint_f", "fan_duty", "fire", "fuel", "fuel_btu", "t_amb", "wind_mph",
-    "lid_open", "lid_hold",
+    "lid_open", "lid_hold", "startup_hold",
 )
 DEFAULT_SAMPLE_S = 60
 

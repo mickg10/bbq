@@ -71,13 +71,23 @@ def test_no_pit_probe_means_no_demand():
 def test_ramp_slides_the_target_down_over_the_last_span():
     law = ProportionalController()
     cfg = _cfg(ramp=1, food_set_f=(203.0, 180.0, 180.0))
+    floor = 203.0 + law.ramp_above_f  # the guide: "slightly above your food set point"
     far = law.step(0.0, 150.0, (120.0, None, None), cfg)
     assert (far.setpoint_f, far.ramp_active) == (225.0, False)
     halfway = law.step(0.0, 150.0, (188.0, None, None), cfg)  # 15 °F short
-    assert halfway.setpoint_f == pytest.approx(203.0 + (225.0 - 203.0) * 0.5)
+    assert halfway.setpoint_f == pytest.approx(floor + (225.0 - floor) * 0.5)
     assert halfway.ramp_active
     at_target = law.step(0.0, 150.0, (204.0, None, None), cfg)
-    assert (at_target.setpoint_f, at_target.ramp_active) == (203.0, True)
+    assert (at_target.setpoint_f, at_target.ramp_active) == (floor, True)
+
+
+def test_ramp_ends_a_little_above_the_food_setpoint():
+    """How far above is not said, so it is a named parameter of the law."""
+    law = ProportionalController(ramp_above_f=10.0, ramp_span_f=20.0)
+    cfg = _cfg(ramp=1, food_set_f=(200.0, None, None))
+    assert law.step(0.0, 150.0, (180.0, None, None), cfg).setpoint_f == 225.0
+    assert law.step(0.0, 150.0, (190.0, None, None), cfg).setpoint_f == pytest.approx(217.5)
+    assert law.step(0.0, 150.0, (205.0, None, None), cfg).setpoint_f == 210.0
 
 
 def test_ramp_needs_a_plugged_probe_and_a_lower_food_target():
@@ -174,12 +184,38 @@ def test_a_slow_drift_is_not_the_lid():
 def test_a_rising_pit_is_not_the_lid_and_reset_forgets_the_window():
     law = ProportionalController()
     cfg = _cfg()
-    rising = _feed(law, [150.0 + 0.5 * k for k in range(61)], cfg)
+    rising = _feed(law, [150.0 + 0.1 * k for k in range(61)], cfg)  # 6 °F/min
     assert not rising.lid_hold and rising.fan_pct == 100
     _feed(law, [220.0 - 0.5 * k for k in range(61)], cfg, start=1000.0)
     assert law.step(1100.0, 190.0, NO_FOOD, cfg).lid_hold
     law.reset()
     assert not law.step(1100.0, 190.0, NO_FOOD, cfg).lid_hold
+
+
+def test_a_fast_climb_at_startup_holds_the_fan_until_it_slows():
+    """The guide: with open-lid detect on at start-up, "the rate of temperature
+    rise of your pit will be limited to preventing over-firing"."""
+    law = ProportionalController()
+    cfg = _cfg()
+    outs = [law.step(float(i), 150.0 + 0.5 * i, NO_FOOD, cfg) for i in range(90)]  # 30 °F/min
+    assert not any(out.lid_hold for out in outs)          # a rise is not the lid
+    free = [out for out in outs if not out.startup_hold]
+    assert len(free) == 60 and free[-1].fan_pct == 100     # no verdict before a whole window
+    held = outs[len(free):]
+    assert held and all(out.startup_hold and out.fan_pct == 0 for out in held)
+    assert law.last_rate_f_per_min == pytest.approx(30.0)
+    # the default kamado never meets the limit
+    gentle = ProportionalController()
+    outs = [gentle.step(float(i), 150.0 + 0.1 * i, NO_FOOD, cfg) for i in range(120)]  # 6 °F/min
+    assert not any(out.startup_hold for out in outs)
+
+
+def test_the_startup_limit_is_open_lid_detect_s():
+    """The guide gives the setting both jobs, so switched off it limits nothing."""
+    law = ProportionalController()
+    outs = [law.step(float(i), 150.0 + 0.5 * i, NO_FOOD, _cfg(opendetect=False)) for i in range(90)]
+    assert not any(out.startup_hold or out.lid_hold for out in outs)
+    assert outs[-1].fan_pct == 100
 
 
 def test_probe_noise_never_trips_the_detector_even_at_the_very_start():

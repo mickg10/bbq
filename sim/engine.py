@@ -242,7 +242,7 @@ class Simulator:
         for i, name in enumerate(PROBE_NAMES):
             row[f"{name}_status"] = int(out.statuses[i])
         row["timer"] = out.timer
-        row["timer_status"] = out.timer_status
+        row["timer_status"] = int(out.timer_status)
         row["pit_f"] = self.cooker.pit_f
         for i in range(FOOD_PROBES):
             food = self.food(i)
@@ -255,6 +255,7 @@ class Simulator:
         row["wind_mph"] = self.env.wind_at(self.clock.t)
         row["lid_open"] = int(self.env.lid_open_at(self.clock.t))
         row["lid_hold"] = int(out.lid_hold)
+        row["startup_hold"] = int(out.startup_hold)
         return row
 
 

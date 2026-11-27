@@ -59,6 +59,7 @@ class ControlOutput:
     setpoint_f: float         # the target actually used (after ramp / hold)
     lid_hold: bool = False    # open-lid recovery window: demand forced to 0
     ramp_active: bool = False
+    startup_hold: bool = False  # climbing faster than the startup limit: demand 0
 
 
 @runtime_checkable

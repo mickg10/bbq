@@ -6,25 +6,43 @@ hands a :class:`sim.controllers.base.Controller` the probe readings and the
 settings, and applies the fan demand it gets back. The control law is the
 plug-in's business; what follows is everything around it.
 
-Assumptions the firmware phase will confirm or correct:
+What the vendor's guide (CyberQ Wi-Fi User Guide, Firmware v 2.3/3.1) and the
+stock web pages establish:
 
 * Status codes are the stock UI's ``statusValToStr``: 0 OK, 1 HIGH, 2 LOW,
-  3 DONE, 4 ERROR, 5 HOLD, 6 ALARM, 7 SHUTDOWN.
-* ``ALARMDEV`` either side of the *effective* pit target gives HIGH or LOW.
-  A food probe is not LOW for being under its target: the recon capture shows
-  a 74.6 °F food probe on a 180 °F target as OK.
-* A food probe at or above its target is DONE and stays DONE, until its
-  target is raised above it or the probe is unplugged.
+  3 DONE, 4 ERROR, 5 HOLD, 6 ALARM, 7 SHUTDOWN. Each field uses a subset of
+  them (the V1.7 guide's table of status.xml values, and the stock page
+  rendering every field through that one table):
+
+  - ``COOK_STATUS``: OK, HIGH, LOW, ERROR;
+  - ``FOODn_STATUS``: OK, DONE, ERROR;
+  - ``TIMER_STATUS``: OK, and HOLD, ALARM or SHUTDOWN after a timeout with
+    that action. There is no "running" code.
+
+* ``ALARMDEV`` either side of the effective pit target gives HIGH or LOW.
+  The guide sets it from 10 to 100 °F, and says the alarm *sound* is only
+  allowed once the pit has got near its setpoint; the status shows at once
+  (the recon capture reads LOW at 75 °F).
 * ``TIMEOUT_ACTION`` is control.htm's list — 0 No Action, 1 Hold, 2 Alarm,
-  3 Shutdown — and on expiry each does what it says to the *cook* status:
-  HOLD drops the pit to COOKHOLD, ALARM flags it, SHUTDOWN stops the fan.
-* Cook hold also engages when the last plugged-in food probe becomes DONE.
-* An unplugged cook probe is ERROR and stops the fan; an unplugged food probe
-  is ERROR. A pit at or above ``safety_cutoff_f`` latches SHUTDOWN.
-* HOLD, ALARM and SHUTDOWN are latched. A different cook setpoint, a raised
-  food setpoint or a new timer releases them.
-* ``TIMER_STATUS`` is 0 idle, 1 counting down, 2 expired (the stock UI only
-  tells 1 from everything else).
+  3 Shutdown. On expiry: HOLD resets the cook setpoint to COOKHOLD (and
+  COOK_SET shows it), ALARM raises the timer status and nothing else, SHUTDOWN
+  turns the fan off.
+* Cook hold comes from the timer and nothing else. The automatic version of
+  it is the ramp. (That every food probe being DONE also started it was a
+  guess here, and the guide does not have it.)
+* An open (unplugged) probe reads OPEN and is ERROR, on any channel.
+
+Guesses, for a recorded cook or the firmware to confirm or correct:
+
+* An open cook probe stops the fan.
+* A food probe at or above its target is DONE and stays DONE until its target
+  is raised or the probe unplugged (the guide does not say whether it
+  latches).
+* HOLD, ALARM and SHUTDOWN stay raised until the user changes a setpoint or
+  sets a timer (the guide says only that a key press clears the message).
+* ``safety_cutoff_f`` is not the device's: it is the simulator's own guard,
+  which stops the fan while the pit reads that hot. The guide has no
+  over-temperature shutdown.
 
 Temperatures are °F; setpoints are multiples of 0.1, the wire's resolution.
 """
@@ -142,15 +160,13 @@ class DeviceSettings:
 
 @dataclass
 class TimerState:
-    """The cook timer, as ``COOK_TIMER`` sets it and ``TIMER_CURR`` reports it."""
+    """The cook timer, as ``COOK_TIMER`` sets it and ``TIMER_CURR`` reports it.
+    Its *status* on the wire is the device's to raise (see
+    :attr:`CyberQDevice.timer_status`): the timer running is not a status."""
 
     remaining_s: float = 0.0
     running: bool = False
     expired: bool = False
-
-    @property
-    def status(self) -> int:
-        return 1 if self.running else 2 if self.expired else 0
 
     @property
     def text(self) -> str:
@@ -184,15 +200,16 @@ class DeviceOutput:
     setpoint_f: float            # the target the law drove to
     statuses: tuple[Status, ...]  # cook, food1..3
     timer: str                   # TIMER_CURR
-    timer_status: int            # TIMER_STATUS
+    timer_status: Status         # TIMER_STATUS: OK until a timeout raises it
     lid_hold: bool
     ramp_active: bool
+    startup_hold: bool = False  # the startup limit has the fan off
 
     @property
     def mode(self) -> Mode:
-        if self.statuses[0] is Status.SHUTDOWN:
+        if self.timer_status is Status.SHUTDOWN:
             return Mode.SHUTDOWN
-        if self.statuses[0] is Status.HOLD:
+        if self.timer_status is Status.HOLD:
             return Mode.HOLD
         return Mode.NORMAL
 
@@ -211,13 +228,14 @@ class CyberQDevice:
         self.controller = controller if controller is not None else ProportionalController()
         self.safety_cutoff_f = float(safety_cutoff_f)
         self.timer = TimerState()
+        self.timer_status = Status.OK  # raised by a timeout, in its action's name
         self.hold = False
         self.alarm = False
         self.shutdown = False
         self.done = [False] * FOOD_PROBES
         self.output = DeviceOutput(
             0, 0.0, self.settings.cook_set_f, self.settings.cook_set_f,
-            (Status.OK,) * 4, self.timer.text, self.timer.status, False, False,
+            (Status.OK,) * 4, self.timer.text, Status.OK, False, False, False,
         )
 
     # -- settings -------------------------------------------------------------
@@ -236,6 +254,7 @@ class CyberQDevice:
     def release(self) -> None:
         """Let the user take over: forget HOLD, ALARM and SHUTDOWN."""
         self.hold = self.alarm = self.shutdown = False
+        self.timer_status = Status.OK
 
     def set_cook_set_tenths(self, tenths: float) -> None:
         """COOK_SET as posted (°F × 10), clamped; a change releases the latches."""
@@ -327,44 +346,31 @@ class CyberQDevice:
         pit = None if readings[0] is None else readings[0] / 10.0
         foods = [None if r is None else r / 10.0 for r in readings[1:]]
 
-        # safety first: an overheating pit stops the fan and stays stopped
-        if pit is not None and pit >= self.safety_cutoff_f:
-            self.shutdown = True
+        # the simulator's own guard, not a device behaviour: nothing feeds a
+        # pit this hot (while it reads this hot; it is not latched)
+        overheated = pit is not None and pit >= self.safety_cutoff_f
 
-        # the timer
+        # the timer, and what its running out does
         if self.timer.tick(dt):
             action = s.timeout_action
             if action is TimeoutAction.HOLD:
-                self.hold = True
+                self.hold, self.timer_status = True, Status.HOLD
             elif action is TimeoutAction.ALARM:
-                self.alarm = True
+                self.alarm, self.timer_status = True, Status.ALARM
             elif action is TimeoutAction.SHUTDOWN:
-                self.shutdown = True
+                self.shutdown, self.timer_status = True, Status.SHUTDOWN
 
-        # food reaching its target; the last one to get there starts cook hold
-        plugged, all_done, newly_done = 0, True, False
+        # food reaching its target
         for i, food in enumerate(foods):
-            if food is None:
-                continue
-            plugged += 1
-            if not self.done[i] and food >= s.food_set_f[i]:
-                self.done[i] = newly_done = True
-            all_done = all_done and self.done[i]
-        if newly_done and plugged and all_done:
-            self.hold = True
+            if food is not None and not self.done[i] and food >= s.food_set_f[i]:
+                self.done[i] = True
 
         # the law
         out = self.controller.step(t, pit, foods, self._config())
 
-        # statuses: ERROR > SHUTDOWN > ALARM > HOLD > HIGH/LOW > OK
+        # statuses, each field in its own subset of the codes
         if pit is None:
             cook_status = Status.ERROR
-        elif self.shutdown:
-            cook_status = Status.SHUTDOWN
-        elif self.alarm:
-            cook_status = Status.ALARM
-        elif self.hold:
-            cook_status = Status.HOLD
         elif pit > out.setpoint_f + s.alarmdev_f:
             cook_status = Status.HIGH
         elif pit < out.setpoint_f - s.alarmdev_f:
@@ -373,21 +379,17 @@ class CyberQDevice:
             cook_status = Status.OK
         statuses = [cook_status]
         for i, food in enumerate(foods):
-            if food is None:
-                statuses.append(Status.ERROR)
-            elif self.done[i] and food < s.food_set_f[i] - s.alarmdev_f:
-                statuses.append(Status.LOW)  # done, then cooled off
-            elif self.done[i]:
-                statuses.append(Status.DONE)
-            else:
-                statuses.append(Status.OK)
+            statuses.append(
+                Status.ERROR if food is None else Status.DONE if self.done[i] else Status.OK
+            )
 
-        # the fan: off without a pit probe or when shut down
-        fan_pct = 0 if pit is None or self.shutdown else int(out.fan_pct)
+        # the fan: off without a pit probe, when a timeout shut it down, or
+        # when the simulator's guard is holding it
+        fan_pct = 0 if pit is None or self.shutdown or overheated else int(out.fan_pct)
         duty = duty_in_step(t, dt, fan_pct, s.cyctime_s) if fan_pct else 0.0
         self.output = DeviceOutput(
             fan_pct, duty, self.reported_cook_set_f, out.setpoint_f,
-            tuple(statuses), self.timer.text, self.timer.status,
-            out.lid_hold, out.ramp_active,
+            tuple(statuses), self.timer.text, self.timer_status,
+            out.lid_hold, out.ramp_active, out.startup_hold,
         )
         return self.output

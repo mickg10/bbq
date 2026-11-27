@@ -178,7 +178,7 @@ class WireState:
         # the timer as it stands right now, so a timer that was just set is
         # already showing when the device answers the write that set it
         state["TIMER_CURR"] = self.device.timer.text
-        state["TIMER_STATUS"] = self.device.timer.status
+        state["TIMER_STATUS"] = int(self.device.timer_status)
         state["FAN_SHORTED"] = 0
         return state
 

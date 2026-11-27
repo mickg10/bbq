@@ -111,16 +111,17 @@ def test_cook_hold_is_not_the_setpoint_even_when_it_lasts_longest():
     for row in rows[:160]:
         row.update(setpoint_f=250.0, cook_set=250.0)
     for row in rows[160:]:
-        row["cook_status"] = 5  # HOLD
+        row["timer_status"] = 5  # HOLD is a timer status (the cook probe stays OK)
     s = summarize(rows, fuel0_btu=1.0)
     assert s["setpoint_f"] == 250.0  # 160 rows of cook against 300 of hold
     assert s["overshoot_f"] == 0.0 and s["to_setpoint_s"] == pytest.approx(39 * STEP)
     assert s["steady_error_f"] == pytest.approx(0.0, abs=1e-6) and s["held_s"] == pytest.approx(121 * STEP)
-    assert s["final"]["setpoint_f"] == 180.0 and "HOLD" in s["cook_status_s"]
+    assert s["final"]["setpoint_f"] == 180.0 and "HOLD" in s["timer_status_s"]
+    assert "HOLD" not in s["cook_status_s"]
     # a run that is nothing but hold still gets a reference
     only = _minutes(60, 180.0, fan=0, setpoint=180.0)
     for row in only:
-        row["cook_status"] = 5
+        row["timer_status"] = 5
     assert summarize(only, fuel0_btu=1.0)["setpoint_f"] == 180.0
 
 
@@ -279,7 +280,9 @@ def test_brisket_12h():
     stall = s["food"]["food1"]["stall"]
     assert 145 < stall[2] < 155 and stall[1] - stall[0] > 2.5 * 3600   # hours in the stall
     assert s["steady_error_f"] == pytest.approx(-9.6, abs=1.0)          # the documented law's offset
-    assert "HOLD" in s["cook_status_s"] and s["final"]["cook_status"] == 5
+    # the food being done is not cook hold: that is the timer's doing
+    assert s["final"]["cook_status"] == 0 and "HOLD" not in s["timer_status_s"]
+    assert s["final"]["setpoint_f"] == 225.0
     assert s["to_setpoint_s"] is None
 
 
@@ -287,6 +290,10 @@ def test_ribs_6h():
     s = run_scenario(load_scenario(SCENARIOS_DIR / "ribs-6h.yaml"), sample_every=60, dt=5.0).summary
     assert 5 * 3600 < s["food"]["food1"]["done_at_s"] < 6 * 3600       # a six-hour rack
     assert s["food"]["food1"]["stall"][2] == pytest.approx(153.0, abs=2.0)
+    # the seven-hour timer drops the pit to COOKHOLD, and the timer says so
+    assert "HOLD" in s["timer_status_s"] and s["final"]["cook_status"] == 0
+    assert (s["final"]["setpoint_f"], s["final"]["timer_status"]) == (180.0, 5)
+    assert s["final"]["cook_f"] < 185.0
 
 
 def test_lid_open():

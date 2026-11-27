@@ -53,12 +53,12 @@ tests/sim/        deterministic (seeded) unit tests and scenario regression test
 A recording with no heat-up in it has nothing to teach about the plant. `fit` says so rather than fitting anyway, and gives what such a recording can: the air temperature and the probes' noise.
 
 ## Baseline controller ("as documented")
-Implements what the manual and the web UI imply. The firmware phase will confirm or correct it:
+Implements what the vendor's guide (CyberQ Wi-Fi User Guide, Firmware v 2.3/3.1) and the web UI say, and no more. One thing the guide says, it cannot: the box runs a "full-time adaptive control algorithm [that] learns your pit". So the baseline is deliberately plain, and the firmware phase will confirm or correct it:
 - **Output**: `fan% = clamp((set - pit) / PROPBAND * 100, 0, 100)`. The fan runs `fan% * CYCTIME` seconds of each `CYCTIME` window.
-- **Open-lid detect**: when the pit drops fast, hold the fan off for a recovery window.
-- **Ramp**: as the chosen food probe approaches its setpoint, taper the pit setpoint toward food set.
-- **Timer and food done**: `TIMEOUT_ACTION` (none, hold, alarm) and `COOKHOLD` take over the pit setpoint.
-- **Statuses**: `ALARMDEV` gives HIGH or LOW, food reaching set gives DONE, OPEN gives ERROR, plus HOLD and ALARM. These map to codes 0..7 exactly as the device reports them.
+- **Open-lid detect**: when the pit drops fast, hold the fan off for a recovery window. The guide gives the same setting a second job: with it on at start-up, "the rate of temperature rise of your pit will be limited to preventing over-firing" (it quotes 250 °F in a minimum of about 20–30 minutes). How is not said. Here a pit still below its target and rising faster than 8 °F/min is not fed until it slows; the default kamado climbs at most 4.8 °F/min and never meets the limit.
+- **Ramp**: as the chosen food probe comes within 30 °F of its setpoint, taper the pit setpoint down to 5 °F above the food setpoint. The guide says ramp will "hold the pit temperature slightly above your food set point"; how far above is not said, so it is a parameter (`ramp_above_f`).
+- **Timer**: `COOK_TIMER` with `TIMEOUT_ACTION` (no action, hold, alarm, shutdown). Cook hold comes from the timer and nothing else: HOLD shows as the *timer* status and moves the target to `COOKHOLD`; ALARM only raises the timer status; SHUTDOWN stops the fan.
+- **Statuses**: each field uses its own subset of the codes 0..7, as the V1.7 guide's table of `status.xml` values gives them. The cook probe is OK, or HIGH/LOW once it is `ALARMDEV` away from the effective target, or ERROR when open; a food probe is OK, DONE at its setpoint, or ERROR when open; the timer is OK, or HOLD/ALARM/SHUTDOWN after a timeout with that action. A running timer is not a status.
 - **Variants, for comparison only**: `bias` is the same law with a fixed share of the fan up front; `pi` adds integral action, clamped to 0–100 % and not accumulated while the output is already saturated. Neither is documented. They bracket what the firmware might do, and `sim run --controller proportional,bias,pi` scores all three on every scenario.
 
 ## The scorecard

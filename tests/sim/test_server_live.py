@@ -177,14 +177,15 @@ def test_dashboard_writes_reach_the_simulated_device(dashboard):
         response = client.put("/api/timer", json={"hhmmss": "00:30:00"})
         assert response.status_code == 200
         written = response.json()["sample"]
-        assert (written["timer_status"], written["output_pct"]) == (1, 0)
+        # a running timer is not a status: TIMER_STATUS stays OK (0) until a timeout
+        assert (written["timer_status"], written["output_pct"]) == (0, 0)
         written_s = parse_hhmmss(written["timer_curr"])
         assert 1770 <= written_s <= 1800
         _until(lambda: sim.device.timer.remaining_s <= 1200, message="ten simulated minutes")
         time.sleep(0.1)  # let the poller pick the new value up
         sample = client.get("/api/status").json()["sample"]
         seen_s = parse_hhmmss(sample["timer_curr"])
-        assert sample["timer_status"] == 1
+        assert sample["timer_status"] == 0
         assert written_s - 700 < seen_s < written_s - 500  # ten minutes gone, still running
 
 

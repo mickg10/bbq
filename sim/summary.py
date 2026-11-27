@@ -98,7 +98,7 @@ def summarize(
     # most common *outside* cook hold. Hold is a different target on purpose,
     # and in a long-enough run it is in force longest — measuring against it
     # called 70 °F of perfectly good hold "overshoot".
-    cooking = [row for row in rows if row["cook_status"] != Status.HOLD]
+    cooking = [row for row in rows if row["timer_status"] != Status.HOLD]
     reference = Counter(
         round(row["setpoint_f"], 1) for row in (cooking if cooking else rows)
     ).most_common(1)[0][0]
@@ -110,9 +110,10 @@ def summarize(
     window = range(settled_start, settled_start + settled_length)
 
     burned = fuel0_btu * (1.0 - rows[-1]["fuel"]) if fuel0_btu > 0 else 0.0
-    status_time = Counter()
+    status_time, timer_time = Counter(), Counter()
     for row in rows:
         status_time[Status(row["cook_status"]).name] += step
+        timer_time[Status(row["timer_status"]).name] += step
 
     lid_low = [
         row["cook"] for row in rows
@@ -179,6 +180,7 @@ def summarize(
         "fuel_lb": burned / BTU_PER_LB_LUMP,
         "fuel_left": last["fuel"] if fuel0_btu > 0 else None,
         "cook_status_s": dict(status_time),
+        "timer_status_s": dict(timer_time),
         "lid_holds": holds,
         "lid_low_f": min(lid_low) if lid_low else None,
         "lid_back_s": lid_back,
@@ -188,6 +190,7 @@ def summarize(
             "setpoint_f": last["setpoint_f"],
             "cook_status": last["cook_status"],
             "timer": last["timer"],
+            "timer_status": last["timer_status"],
         },
     }
 
@@ -218,9 +221,8 @@ def _notes(summary: dict) -> str:
             if summary["lid_holds"] else ", no hold"
         )
         notes.append(f"lid, low {summary['lid_low_f']:.0f} °F{hold}")
-    statuses = summary["cook_status_s"]
-    for name in ("HOLD", "ALARM", "SHUTDOWN"):
-        if name in statuses:
+    for name in ("HOLD", "ALARM", "SHUTDOWN"):  # timer statuses: a timeout did it
+        if name in summary["timer_status_s"]:
             notes.append({"HOLD": "cook hold", "ALARM": "alarm", "SHUTDOWN": "shutdown"}[name])
     return ", ".join(notes)
 
@@ -266,7 +268,12 @@ def format_summary(summary: dict) -> str:
             f"  lid came off: pit reading down to {_num(summary['lid_low_f'])} °F; {detector}"
         )
     lines.append(
-        f"  cook status: {_status_spans(summary['cook_status_s'])}; ends at "
+        f"  cook status: {_status_spans(summary['cook_status_s'])}"
+        + (
+            "; timer status: " + _status_spans(summary["timer_status_s"])
+            if set(summary["timer_status_s"]) != {"OK"} else ""
+        )
+        + "; ends at "
         f"{_num(final['cook_f'])} °F on a {final['setpoint_f']:g} °F target, "
         f"{Status(final['cook_status']).name}"
     )

@@ -1,8 +1,9 @@
 # A rack of spare ribs at 250 °F: a short stall around 150 °F, then done at
-# 195 °F in five to six hours.
+# 195 °F in five to six hours. A seven-hour timer then drops the pit to its
+# cook-hold temperature for the last hour.
 name: ribs-6h
-description: A rack of spare ribs at 250 °F from a cold start.
-duration: 7h
+description: A rack of spare ribs at 250 °F from a cold start, on a seven-hour timer.
+duration: 8h
 seed: 0
 controller: proportional
 ambient: 70
@@ -15,6 +16,8 @@ device:
   cook_set: 250
   food_set: {food1: 195}
   cookhold: 180
+  timer: 7h
+  timeout_action: hold
 
 names: {cook: Pit, food1: Ribs}
 

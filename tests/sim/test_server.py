@@ -231,7 +231,8 @@ async def test_the_main_form_steers_the_device_and_starts_its_timer(client, serv
     sample = parse_all_xml((await client.get("/all.xml")).text)
     assert sample["probes"]["cook"]["set"] == 250.0
     assert sample["probes"]["cook"]["name"] == "Brisket"
-    assert (sample["timer_curr"], sample["timer_status"]) == ("01:29:00", 1)
+    # running is not a status: TIMER_STATUS stays OK (0) until a timeout raises it
+    assert (sample["timer_curr"], sample["timer_status"]) == ("01:29:00", 0)
     # chasing a target 25 °F further off than a moment ago: most of the fan
     assert sample["output_pct"] >= 80 > before
 

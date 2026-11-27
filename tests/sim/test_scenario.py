@@ -252,7 +252,7 @@ def test_device_fields_reach_a_running_simulator(make_sim):
     assert (s.cook_set_f, s.food_set_f, s.cookhold_f, s.alarmdev_f) == (250.0, [203.0, 190.0, 180.0], 175.0, 20.0)
     assert (s.propband_f, s.cyctime_s, s.ramp, s.opendetect) == (10.0, 8, 3, False)
     assert s.timeout_action is TimeoutAction.SHUTDOWN
-    assert (sim.device.timer.text, sim.device.timer.status) == ("00:10:00", 1)
+    assert (sim.device.timer.text, int(sim.device.timer_status)) == ("00:10:00", 0)
 
 
 # -- files ------------------------------------------------------------------------
@@ -320,7 +320,7 @@ def test_build_wires_everything_together():
     assert plant.fuel_btu == pytest.approx(15 * BTU_PER_LB_LUMP)
     assert sim.device.settings.ramp == 1 and sim.device.settings.opendetect is False
     assert sim.device.controller.name == "pi" and sim.device.controller.ki == 0.2
-    assert (sim.device.timer.text, sim.device.timer.status) == ("12:00:00", 1)
+    assert (sim.device.timer.text, int(sim.device.timer_status)) == ("12:00:00", 0)
     assert sim.env.ambient_at(6 * 3600) == 62.5 and sim.env.wind_at(0) == 0.0
     assert sim.env.lid_open_at(5 * 3600) and not sim.env.lid_open_at(6 * 3600)
     assert sim.seed == 3 and [probe.reading is not None for probe in sim.probes[:3]] == [True] * 3
